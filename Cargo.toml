@@ -1,5 +1,5 @@
 [package]
-name = "rust-huyast"
+name = "todolist-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 crossterm = "0.23.1"
+rusqlite = { version = "0.27.0", features = ["bundled"] }

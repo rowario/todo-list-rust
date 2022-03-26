@@ -1,5 +1,4 @@
 Simple todo list writen on rust.
-
-TODO: add local storage
+Stored all data in sqlite database.
 
 [![img.png](img.png)]()

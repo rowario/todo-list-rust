@@ -1,5 +1,6 @@
-use std::io::{stdin, stdout};
+mod database;
 
+use std::io::{stdin, stdout};
 use crossterm::{
     cursor,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
@@ -8,34 +9,14 @@ use crossterm::{
     event::{KeyCode, KeyEvent, Event::Key, read},
     terminal::{Clear, ClearType},
 };
-
-struct TodoItem {
-    text: String,
-    completed: bool,
-}
-
-impl TodoItem {
-    fn new(text: String) -> TodoItem {
-        TodoItem {
-            text,
-            completed: false,
-        }
-    }
-
-    fn toggle(&mut self) {
-        self.completed = !self.completed;
-    }
-}
-
-// TODO: Implement a local storage
+use database::*;
 
 fn main() -> Result<()> {
+    let db = init("database.sqlite").expect("Failed to initialize database");
+
+    let mut todo_items = get_todos(&db).expect("Failed to get todos");
+
     stdout().execute(Clear(ClearType::All))?;
-    let mut todo_items = vec![
-        TodoItem::new("Buy milk".to_string()),
-        TodoItem::new("Wash the dishes".to_string()),
-        TodoItem::new("Learn to code".to_string()),
-    ];
 
     let mut current = 0;
 
@@ -58,16 +39,10 @@ fn main() -> Result<()> {
                 Color::Reset
             };
 
-            let text = if item.completed {
-                format!("{} {}", "[x]", item.text)
-            } else {
-                format!("{} {}", "[ ]", item.text)
-            };
-
             stdout()
                 .execute(SetForegroundColor(color))?
                 .execute(SetBackgroundColor(background_color))?
-                .execute(Print(text))?
+                .execute(Print(item.get_text().as_str()))?
                 .execute(ResetColor)?
                 .execute(Print("\n"))?;
         }
@@ -96,7 +71,9 @@ fn main() -> Result<()> {
                 stdin().read_line(&mut text)?;
                 stdout().execute(cursor::Hide)?;
 
-                todo_items.push(TodoItem::new(text.trim().to_string()));
+                let new_todo = new_todo(&db, text.trim()).expect("Error: Could not add todo");
+
+                todo_items.push(new_todo);
             }
             Key(KeyEvent { code: KeyCode::Char('q'), modifiers: _ }) => {
                 stdout()
@@ -117,11 +94,13 @@ fn main() -> Result<()> {
             }
             Key(KeyEvent { code: KeyCode::Char('x'), modifiers: _ }) => {
                 if let Some(item) = todo_items.get_mut(current) {
+                    toggle_todo(&db, item.id).expect("Error: Could not toggle todo");
                     item.toggle();
                 }
             }
             Key(KeyEvent { code: KeyCode::Char('d'), modifiers: _ }) => {
-                if todo_items.get_mut(current).is_some() {
+                if let Some(todo) = todo_items.get(current) {
+                    delete_todo(&db, todo.id).expect("Error: Could not delete todo");
                     todo_items.remove(current);
                     if current > 0 {
                         current -= 1;
