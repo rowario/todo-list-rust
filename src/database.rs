@@ -1,7 +1,9 @@
 use rusqlite::{Connection, Result};
 
+#[derive(Debug)]
 pub struct Todo {
     pub id: i64,
+    pub position: i64,
     pub text: String,
     pub completed: bool,
 }
@@ -25,6 +27,7 @@ pub fn init(path: &str) -> Result<Connection> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS todos (
             id INTEGER PRIMARY KEY,
+            position INTEGER,
             text TEXT NOT NULL,
             completed INTEGER NOT NULL
         )",
@@ -34,16 +37,17 @@ pub fn init(path: &str) -> Result<Connection> {
 }
 
 pub fn get_todos(conn: &Connection) -> Result<Vec<Todo>> {
-    let mut stmt = conn.prepare("SELECT id, text, completed FROM todos")?;
+    let mut stmt = conn.prepare("SELECT id, position, text, completed FROM todos ORDER BY position ASC")?;
     let todos: Vec<Todo> = stmt.query_map([], |row| {
         Ok(Todo {
             id: row.get(0)?,
-            text: row.get(1)?,
-            completed: row.get(2)?,
+            position: row.get(1)?,
+            text: row.get(2)?,
+            completed: row.get(3)?,
         })
     })?
-    .filter_map(Result::ok)
-    .collect();
+        .filter_map(Result::ok)
+        .collect();
     Ok(todos)
 }
 
@@ -52,8 +56,14 @@ pub fn new_todo(conn: &Connection, text: &str) -> Result<Todo> {
         "INSERT INTO todos (text, completed) VALUES (?1, 0)",
         &[&text],
     )?;
+    let last_id = conn.last_insert_rowid();
+    conn.execute(
+        "UPDATE todos SET position = ?1 WHERE id = ?2",
+        &[&last_id, &last_id],
+    )?;
     Ok(Todo {
         id: conn.last_insert_rowid(),
+        position: last_id,
         text: text.to_string(),
         completed: false,
     })
@@ -71,3 +81,14 @@ pub fn delete_todo(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM todos WHERE id = ?1", &[&id])?;
     Ok(())
 }
+
+pub fn update_todos_positions(conn: &Connection, todos: &[Todo]) -> Result<()> {
+    for (i, todo) in todos.iter().enumerate() {
+        conn.execute(
+            "UPDATE todos SET position = ?1 WHERE id = ?2",
+            &[&i.to_string().as_str(), &todo.id.to_string().as_str()],
+        )?;
+    }
+    Ok(())
+}
+
