@@ -59,7 +59,6 @@ fn main() -> Result<()> {
         enable_raw_mode()?;
         if let Key(key_event) = read()? {
             disable_raw_mode()?;
-            println!("{:#?}", key_event);
             match key_event.code {
                 Char(char) => {
                     match char.to_ascii_lowercase() {
