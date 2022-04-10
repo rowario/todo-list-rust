@@ -7,10 +7,9 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     ExecutableCommand,
     Result,
-    event::{KeyCode::{self, Char}, Event::Key, read},
-    terminal::{Clear, ClearType},
+    event::{KeyCode::{self, Char}, Event::Key, read, KeyModifiers},
+    terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode},
 };
-use crossterm::event::KeyModifiers;
 
 fn main() -> Result<()> {
     let mut path = std::env::current_exe()?;
@@ -57,8 +56,9 @@ fn main() -> Result<()> {
             .execute(SetBackgroundColor(Color::Black))?
             .execute(Print("[n]: New | [d]: Delete | [x]: Toggle | [q]: Quit".trim()))?
             .execute(ResetColor)?;
-
+        enable_raw_mode()?;
         if let Key(key_event) = read()? {
+            disable_raw_mode()?;
             match key_event.code {
                 KeyCode::Up => {
                     if !todo_items.is_empty() && current > 0 {
