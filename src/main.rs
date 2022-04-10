@@ -1,6 +1,5 @@
 mod database;
 
-use database::*;
 use std::io::{stdin, stdout};
 use crossterm::{
     cursor,
@@ -10,6 +9,7 @@ use crossterm::{
     event::{KeyCode::{self, Char}, Event::Key, read, KeyModifiers},
     terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode},
 };
+use database::*;
 
 fn main() -> Result<()> {
     let mut path = std::env::current_exe()?;
