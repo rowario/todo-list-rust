@@ -4,4 +4,4 @@ Stored all data in sqlite database.
 
 ![img.png](img.png)
 
-<kbd>Shift</kbd> + <kbd>↑</kbd><kbd>↓</kbd> to move task.
+<kbd>Shift</kbd> + <kbd>j</kbd><kbd>k</kbd> to move task.

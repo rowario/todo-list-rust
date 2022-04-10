@@ -6,7 +6,7 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     ExecutableCommand,
     Result,
-    event::{KeyCode::{self, Char}, Event::Key, read, KeyModifiers},
+    event::{KeyCode::Char, Event::Key, read, KeyModifiers},
     terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode},
 };
 use database::*;
@@ -59,27 +59,29 @@ fn main() -> Result<()> {
         enable_raw_mode()?;
         if let Key(key_event) = read()? {
             disable_raw_mode()?;
+            println!("{:#?}", key_event);
             match key_event.code {
-                KeyCode::Up => {
-                    if !todo_items.is_empty() && current > 0 {
-                        if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                            todo_items.swap(current, current - 1);
-                            update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                        }
-                        current -= 1;
-                    }
-                }
-                KeyCode::Down => {
-                    if !todo_items.is_empty() && current < todo_items.len() - 1 {
-                        if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                            todo_items.swap(current, current + 1);
-                            update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                        }
-                        current += 1;
-                    }
-                }
                 Char(char) => {
-                    match char {
+                    match char.to_ascii_lowercase() {
+                        'k' | 'л' => {
+                            if !todo_items.is_empty() && current > 0 {
+                                println!("{:#?}",key_event.modifiers);
+                                if key_event.modifiers == KeyModifiers::SHIFT {
+                                    todo_items.swap(current, current - 1);
+                                    update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
+                                }
+                                current -= 1;
+                            }
+                        }
+                        'j' | 'о' => {
+                            if !todo_items.is_empty() && current < todo_items.len() - 1 {
+                                if key_event.modifiers == KeyModifiers::SHIFT {
+                                    todo_items.swap(current, current + 1);
+                                    update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
+                                }
+                                current += 1;
+                            }
+                        }
                         'n' | 'т' => {
                             let mut text = String::new();
                             stdout()
