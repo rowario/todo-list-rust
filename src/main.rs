@@ -64,7 +64,6 @@ fn main() -> Result<()> {
                     match char.to_ascii_lowercase() {
                         'k' | 'л' => {
                             if !todo_items.is_empty() && current > 0 {
-                                println!("{:#?}",key_event.modifiers);
                                 if key_event.modifiers == KeyModifiers::SHIFT {
                                     todo_items.swap(current, current - 1);
                                     update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
