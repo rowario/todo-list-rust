@@ -3,9 +3,12 @@ Simple todo list writen on rust.
 Stored all data in sqlite database.
 
 TODOs:
-[] move to TUI
-[] daily statistics 
-[] default todos list
+
+[ ] move to TUI
+
+[ ] daily statistics 
+
+[ ] default todos list
 
 
 ![img.png](img.png)
