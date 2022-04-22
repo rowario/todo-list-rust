@@ -59,74 +59,71 @@ fn main() -> Result<()> {
         enable_raw_mode()?;
         if let Key(key_event) = read()? {
             disable_raw_mode()?;
-            match key_event.code {
-                Char(char) => {
-                    match char.to_ascii_lowercase() {
-                        'k' | 'л' => {
-                            if !todo_items.is_empty() && current > 0 {
-                                if key_event.modifiers == KeyModifiers::SHIFT {
-                                    todo_items.swap(current, current - 1);
-                                    update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                                }
-                                current -= 1;
-                            }
-                        }
-                        'j' | 'о' => {
-                            if !todo_items.is_empty() && current < todo_items.len() - 1 {
-                                if key_event.modifiers == KeyModifiers::SHIFT {
-                                    todo_items.swap(current, current + 1);
-                                    update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                                }
-                                current += 1;
-                            }
-                        }
-                        'n' | 'т' => {
-                            let mut text = String::new();
-                            stdout()
-                                .execute(Clear(ClearType::All))?
-                                .execute(cursor::Hide)?
-                                .execute(cursor::MoveTo(0, 0))?
-                                .execute(SetForegroundColor(Color::White))?
-                                .execute(SetBackgroundColor(Color::Black))?
-                                .execute(Print("Enter new item: "))?
-                                .execute(ResetColor)?
-                                .execute(cursor::Show)?;
-
-                            stdin().read_line(&mut text)?;
-                            stdout().execute(cursor::Hide)?;
-
-                            let new_todo = new_todo(&db, text.trim()).expect("Error: failed to create new todo");
-
-                            todo_items.push(new_todo);
-                        }
-                        'q' | 'й' => {
-                            stdout()
-                                .execute(Clear(ClearType::All))?
-                                .execute(cursor::MoveTo(0, 0))?
-                                .execute(cursor::Show)?;
-                            break;
-                        }
-
-                        'x' | 'ч' => {
-                            if let Some(item) = todo_items.get_mut(current) {
-                                toggle_todo(&db, item.id).expect("Error: Could not toggle todo");
-                                item.toggle();
-                            }
-                        }
-                        'd' | 'в' => {
-                            if let Some(todo) = todo_items.get(current) {
-                                delete_todo(&db, todo.id).expect("Error: Could not delete todo");
-                                todo_items.remove(current);
-                                if current > 0 {
-                                    current -= 1;
-                                }
+            if let Char(char) = key_event.code {
+                match char.to_ascii_lowercase() {
+                    'k' | 'л' => {
+                        if !todo_items.is_empty() && current > 0 {
+                            if key_event.modifiers == KeyModifiers::SHIFT {
+                                todo_items.swap(current, current - 1);
                                 update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
                             }
+                            current -= 1;
                         }
-                        _ => {}
                     }
+                    'j' | 'о' => {
+                        if !todo_items.is_empty() && current < todo_items.len() - 1 {
+                            if key_event.modifiers == KeyModifiers::SHIFT {
+                                todo_items.swap(current, current + 1);
+                                update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
+                            }
+                            current += 1;
+                        }
+                    }
+                    'n' | 'т' => {
+                        let mut text = String::new();
+                        stdout()
+                            .execute(Clear(ClearType::All))?
+                            .execute(cursor::Hide)?
+                            .execute(cursor::MoveTo(0, 0))?
+                            .execute(SetForegroundColor(Color::White))?
+                            .execute(SetBackgroundColor(Color::Black))?
+                            .execute(Print("Enter new item: "))?
+                            .execute(ResetColor)?
+                            .execute(cursor::Show)?;
+
+                        stdin().read_line(&mut text)?;
+                        stdout().execute(cursor::Hide)?;
+
+                        let new_todo = new_todo(&db, text.trim()).expect("Error: Cannot create new todo :(");
+
+                        todo_items.push(new_todo);
+                    }
+                    'q' | 'й' => {
+                        stdout()
+                            .execute(Clear(ClearType::All))?
+                            .execute(cursor::MoveTo(0, 0))?
+                            .execute(cursor::Show)?;
+                        break;
+                    }
+
+                    'x' | 'ч' => {
+                        if let Some(item) = todo_items.get_mut(current) {
+                            toggle_todo(&db, item.id).expect("Error: Could not toggle todo");
+                            item.toggle();
+                        }
+                    }
+                    'd' | 'в' => {
+                        if let Some(todo) = todo_items.get(current) {
+                            delete_todo(&db, todo.id).expect("Error: Could not delete todo");
+                            todo_items.remove(current);
+                            if current > 0 {
+                                current -= 1;
+                            }
+                            update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
     }
