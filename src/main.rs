@@ -1,132 +1,130 @@
 mod database;
 
-use std::io::{stdin, stdout};
-use crossterm::{
-    cursor,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    ExecutableCommand,
-    Result,
-    event::{KeyCode::Char, Event::Key, read, KeyModifiers},
-    terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode},
-};
 use database::*;
+use std::{io, thread};
+use std::io::Result;
+use std::time::Duration;
+use crossterm::execute;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use tui::{
+    style::{
+        Style,
+        Color,
+    },
+    layout::{Constraint, Direction, Layout}, backend::Backend, Frame, widgets::{Block, Borders}, Terminal};
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    terminal::{
+        EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
+};
+use tui::backend::CrosstermBackend;
+use tui::widgets::{List, ListItem};
 
-fn main() -> Result<()> {
-    let mut path = std::env::current_exe()?;
-    path.pop();
-    path.push("database.sqlite");
-    let db = init(path.to_str().unwrap()).expect("Error: failed to initialize database");
+enum Screen {
+    Todos,
+    Stats,
+}
 
-    let mut todo_items = get_todos(&db).expect("Error: failed to get todos");
+struct App {
+    todos: Vec<Todo>,
+    current_index: usize,
+    current_screen: Screen,
+}
 
-    stdout().execute(Clear(ClearType::All))?;
-
-    let mut current = 0;
-
-    loop {
-        stdout()
-            .execute(cursor::Hide)?
-            .execute(cursor::MoveTo(0, 0))?
-            .execute(Clear(ClearType::All))?;
-
-        for (i, item) in todo_items.iter().enumerate() {
-            let color = if item.completed {
-                Color::Green
-            } else {
-                Color::White
-            };
-
-            let background_color = if i == current {
-                Color::DarkGrey
-            } else {
-                Color::Reset
-            };
-
-            stdout()
-                .execute(SetForegroundColor(color))?
-                .execute(SetBackgroundColor(background_color))?
-                .execute(Print(item.get_text().as_str()))?
-                .execute(ResetColor)?
-                .execute(Print("\n"))?;
-        }
-
-        stdout()
-            .execute(Print("\n"))?
-            .execute(SetForegroundColor(Color::White))?
-            .execute(SetBackgroundColor(Color::Black))?
-            .execute(Print("[n]: New | [d]: Delete | [x]: Toggle | [q]: Quit".trim()))?
-            .execute(ResetColor)?;
-        enable_raw_mode()?;
-        if let Key(key_event) = read()? {
-            disable_raw_mode()?;
-            if let Char(char) = key_event.code {
-                match char.to_ascii_lowercase() {
-                    'k' | 'л' => {
-                        if !todo_items.is_empty() && current > 0 {
-                            if key_event.modifiers == KeyModifiers::SHIFT {
-                                todo_items.swap(current, current - 1);
-                                update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                            }
-                            current -= 1;
-                        }
-                    }
-                    'j' | 'о' => {
-                        if !todo_items.is_empty() && current < todo_items.len() - 1 {
-                            if key_event.modifiers == KeyModifiers::SHIFT {
-                                todo_items.swap(current, current + 1);
-                                update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                            }
-                            current += 1;
-                        }
-                    }
-                    'n' | 'т' => {
-                        let mut text = String::new();
-                        stdout()
-                            .execute(Clear(ClearType::All))?
-                            .execute(cursor::Hide)?
-                            .execute(cursor::MoveTo(0, 0))?
-                            .execute(SetForegroundColor(Color::White))?
-                            .execute(SetBackgroundColor(Color::Black))?
-                            .execute(Print("Enter new item: "))?
-                            .execute(ResetColor)?
-                            .execute(cursor::Show)?;
-
-                        stdin().read_line(&mut text)?;
-                        stdout().execute(cursor::Hide)?;
-
-                        let new_todo = new_todo(&db, text.trim()).expect("Error: Cannot create new todo :(");
-
-                        todo_items.push(new_todo);
-                    }
-                    'q' | 'й' => {
-                        stdout()
-                            .execute(Clear(ClearType::All))?
-                            .execute(cursor::MoveTo(0, 0))?
-                            .execute(cursor::Show)?;
-                        break;
-                    }
-
-                    'x' | 'ч' => {
-                        if let Some(item) = todo_items.get_mut(current) {
-                            toggle_todo(&db, item.id).expect("Error: Could not toggle todo");
-                            item.toggle();
-                        }
-                    }
-                    'd' | 'в' => {
-                        if let Some(todo) = todo_items.get(current) {
-                            delete_todo(&db, todo.id).expect("Error: Could not delete todo");
-                            todo_items.remove(current);
-                            if current > 0 {
-                                current -= 1;
-                            }
-                            update_todos_positions(&db, &todo_items).expect("Error: failed to update todos positions");
-                        }
-                    }
-                    _ => {}
-                }
-            }
+impl App {
+    fn new() -> Self {
+        Self {
+            todos: vec![],
+            current_index: 0,
+            current_screen: Screen::Todos,
         }
     }
+
+    fn add_todos(&mut self, todos: Vec<Todo>) {
+        for todo in todos {
+            self.todos.push(todo);
+        }
+    }
+
+    fn draw_ui<B: Backend>(&self, f: &mut Frame<B>) {
+        match self.current_screen {
+            Screen::Todos => {
+                let chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .margin(1)
+                    .constraints(
+                        [
+                            Constraint::Percentage(20),
+                            Constraint::Percentage(80)
+                        ].as_ref()
+                    )
+                    .split(f.size());
+                let block = Block::default()
+                    .title("TODOs")
+                    .borders(Borders::ALL);
+                let list = List::new(self.get_todos_list()).block(block);
+                f.render_widget(list, chunks[0]);
+                let block = Block::default()
+                    .title("About")
+                    .borders(Borders::ALL);
+                f.render_widget(block, chunks[1]);
+            }
+            Screen::Stats => {}
+        }
+    }
+
+    fn get_todos_list(&self) -> Vec<ListItem> {
+        self.todos.iter().enumerate().map(|(index, todo)| {
+            let item = ListItem::new(todo.get_text());
+            if index == self.current_index {
+                item.style(Style::default().fg(Color::Black).bg(Color::White))
+            }else {
+                item
+            }
+        }).collect()
+    }
+}
+
+fn main() -> Result<()> {
+    // setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut app = App::new();
+
+    app.add_todos(vec![
+        Todo {
+            id: 0,
+            position: 0,
+            text: String::from("Rowario"),
+            completed: false,
+        },
+        Todo {
+            id: 1,
+            position: 1,
+            text: String::from("Rowario 1"),
+            completed: false,
+        },
+    ]);
+
+    terminal.draw(|f| app.draw_ui(f))?;
+
+    thread::sleep(Duration::from_millis(5000));
+    // TODO: controls and app loop
+
+    // restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
 
     Ok(())
 }
