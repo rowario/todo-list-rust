@@ -1,10 +1,9 @@
 mod database;
 
 use database::*;
-use std::{io, thread};
+use std::{io};
 use std::io::Result;
-use std::time::Duration;
-use crossterm::execute;
+use crossterm::{event, execute};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use tui::{
     style::{
@@ -13,12 +12,14 @@ use tui::{
     },
     layout::{Constraint, Direction, Layout}, backend::Backend, Frame, widgets::{Block, Borders}, Terminal};
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{DisableMouseCapture, EnableMouseCapture, Event::{Key}},
     terminal::{
         EnterAlternateScreen,
         LeaveAlternateScreen,
     },
 };
+use crossterm::event::KeyCode;
+use rusqlite::Connection;
 use tui::backend::CrosstermBackend;
 use tui::widgets::{List, ListItem};
 
@@ -28,23 +29,44 @@ enum Screen {
 }
 
 struct App {
+    db: Connection,
     todos: Vec<Todo>,
     current_index: usize,
     current_screen: Screen,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(db: Connection) -> Self {
         Self {
+            db,
             todos: vec![],
             current_index: 0,
             current_screen: Screen::Todos,
         }
     }
 
-    fn add_todos(&mut self, todos: Vec<Todo>) {
-        for todo in todos {
-            self.todos.push(todo);
+    fn load_todos(&mut self) {
+        let todos = get_todos(&self.db).expect("Cannot get todos");
+        self.todos = (todos);
+    }
+
+    fn next(&mut self) {
+        if self.current_index < self.todos.len() - 1 {
+            self.current_index += 1;
+        }
+    }
+
+    fn previous(&mut self) {
+        if self.current_index > 0 {
+            self.current_index -= 1;
+        }
+    }
+
+    fn toggle_todo(&mut self) {
+        if let Some(todo) = self.todos.get_mut(self.current_index) {
+            if toggle_todo(&self.db,todo.id).is_ok() {
+                todo.toggle();
+            }
         }
     }
 
@@ -56,8 +78,8 @@ impl App {
                     .margin(1)
                     .constraints(
                         [
-                            Constraint::Percentage(20),
-                            Constraint::Percentage(80)
+                            Constraint::Percentage(30),
+                            Constraint::Percentage(70)
                         ].as_ref()
                     )
                     .split(f.size());
@@ -67,7 +89,7 @@ impl App {
                 let list = List::new(self.get_todos_list()).block(block);
                 f.render_widget(list, chunks[0]);
                 let block = Block::default()
-                    .title("About")
+                    .title("Notes")
                     .borders(Borders::ALL);
                 f.render_widget(block, chunks[1]);
             }
@@ -77,47 +99,42 @@ impl App {
 
     fn get_todos_list(&self) -> Vec<ListItem> {
         self.todos.iter().enumerate().map(|(index, todo)| {
-            let item = ListItem::new(todo.get_text());
-            if index == self.current_index {
-                item.style(Style::default().fg(Color::Black).bg(Color::White))
-            }else {
-                item
-            }
+            ListItem::new(todo.get_text())
+                .style(Style::default().fg(if index == self.current_index { Color::Yellow } else { Color::White }))
         }).collect()
     }
 }
 
 fn main() -> Result<()> {
-    // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let mut path = std::env::current_exe()?;
+    path.pop();
+    path.push("database.sqlite");
+    let db = init(path.to_str().unwrap()).expect("Error: failed to initialize database");
 
-    app.add_todos(vec![
-        Todo {
-            id: 0,
-            position: 0,
-            text: String::from("Rowario"),
-            completed: false,
-        },
-        Todo {
-            id: 1,
-            position: 1,
-            text: String::from("Rowario 1"),
-            completed: false,
-        },
-    ]);
+    let mut app = App::new(db);
 
-    terminal.draw(|f| app.draw_ui(f))?;
+    app.load_todos();
 
-    thread::sleep(Duration::from_millis(5000));
-    // TODO: controls and app loop
+    loop {
+        terminal.draw(|f| app.draw_ui(f))?;
 
-    // restore terminal
+        if let Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Char('q') => break,
+                KeyCode::Char('j') => app.next(),
+                KeyCode::Char('k') => app.previous(),
+                KeyCode::Char('x') => app.toggle_todo(),
+                _ => {}
+            }
+        }
+    }
+
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
