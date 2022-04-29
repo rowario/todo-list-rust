@@ -24,6 +24,7 @@ use tui::backend::CrosstermBackend;
 use tui::widgets::{List, ListItem};
 
 enum Screen {
+    New,
     Todos,
     Stats,
 }
@@ -47,24 +48,24 @@ impl App {
 
     fn load_todos(&mut self) {
         let todos = get_todos(&self.db).expect("Cannot get todos");
-        self.todos = (todos);
+        self.todos = todos;
     }
 
     fn next(&mut self) {
-        if self.current_index < self.todos.len() - 1 {
+        if !self.todos.is_empty() && self.current_index < self.todos.len() - 1 {
             self.current_index += 1;
         }
     }
 
     fn previous(&mut self) {
-        if self.current_index > 0 {
+        if !self.todos.is_empty() && self.current_index > 0 {
             self.current_index -= 1;
         }
     }
 
     fn toggle_todo(&mut self) {
         if let Some(todo) = self.todos.get_mut(self.current_index) {
-            if toggle_todo(&self.db,todo.id).is_ok() {
+            if toggle_todo(&self.db, todo.id).is_ok() {
                 todo.toggle();
             }
         }
@@ -94,6 +95,7 @@ impl App {
                 f.render_widget(block, chunks[1]);
             }
             Screen::Stats => {}
+            Screen::New => {}
         }
     }
 
