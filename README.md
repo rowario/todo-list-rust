@@ -8,7 +8,7 @@ TODOs:
 - [ ] daily statistics 
 - [ ] default todos list
 - [ ] notes
-- [ ] moving tasks
+- [x] moving tasks
  
 ![img.png](img.png)
 ![img_1.png](img_1.png)

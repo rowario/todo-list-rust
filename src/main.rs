@@ -3,7 +3,7 @@ mod database;
 use database::*;
 use std::{io::{
     self,
-    Result
+    Result,
 }};
 use crossterm::{event, execute};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -20,7 +20,7 @@ use crossterm::{
         LeaveAlternateScreen,
     },
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use rusqlite::Connection;
 use tui::backend::CrosstermBackend;
 use tui::layout::Rect;
@@ -61,14 +61,25 @@ impl App {
         self.current_screen = screen;
     }
 
-    fn next(&mut self) {
+    fn swap(&mut self, index: usize) {
+        self.todos.swap(self.current_index, index);
+        update_todos_positions(&self.db, &self.todos).expect("Cannot update TODOs positions.")
+    }
+
+    fn next(&mut self, modifiers: KeyModifiers) {
         if !self.todos.is_empty() && self.current_index < self.todos.len() - 1 {
+            if modifiers == KeyModifiers::SHIFT {
+                self.swap(self.current_index + 1);
+            }
             self.current_index += 1;
         }
     }
 
-    fn previous(&mut self) {
+    fn previous(&mut self, modifiers: KeyModifiers) {
         if !self.todos.is_empty() && self.current_index > 0 {
+            if modifiers == KeyModifiers::SHIFT {
+                self.swap(self.current_index - 1);
+            }
             self.current_index -= 1;
         }
     }
@@ -176,23 +187,25 @@ fn main() -> Result<()> {
                         }
                         KeyCode::Backspace => {
                             app.input_value.pop();
-                        },
+                        }
                         KeyCode::Enter => {
                             app.set_screen(Screen::Todos);
                             app.create();
-                        },
+                        }
                         _ => {}
                     }
                 }
                 Screen::Todos => {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char('k') => app.previous(),
-                        KeyCode::Char('j') => app.next(),
-                        KeyCode::Char('x') => app.toggle(),
-                        KeyCode::Char('d') => app.delete(),
-                        KeyCode::Char('n') => app.set_screen(Screen::New),
-                        _ => {}
+                    if let KeyCode::Char(char) = key.code {
+                        match char.to_ascii_lowercase() {
+                            'q' => break,
+                            'k' => app.previous(key.modifiers),
+                            'j' => app.next(key.modifiers),
+                            'x' => app.toggle(),
+                            'd' => app.delete(),
+                            'n' => app.set_screen(Screen::New),
+                            _ => {}
+                        }
                     }
                 }
                 Screen::Stats => {}
