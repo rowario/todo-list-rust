@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 tui = "0.17.0"
 crossterm = "0.23.1"
+unicode-width = "0.1.9"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
