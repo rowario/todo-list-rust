@@ -180,7 +180,6 @@ fn main() -> Result<()> {
             match app.current_screen {
                 Screen::New => {
                     match key.code {
-                        KeyCode::Char(c) => app.input_value.push(c),
                         KeyCode::Esc => {
                             app.input_value.clear();
                             app.set_screen(Screen::Todos);
@@ -192,6 +191,7 @@ fn main() -> Result<()> {
                             app.set_screen(Screen::Todos);
                             app.create();
                         }
+                        KeyCode::Char(c) => app.input_value.push(c),
                         _ => {}
                     }
                 }
@@ -229,9 +229,9 @@ fn input_rect(percent_x: u16, r: Rect) -> Rect {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Percentage((100 - Constraint::Length(3).apply(3)) / 2),
-                Constraint::Length(3),
-                Constraint::Percentage((100 - Constraint::Length(3).apply(3)) / 2),
+                Constraint::Length(r.height / 2 - 1),
+                Constraint::Min(3),
+                Constraint::Length(r.height / 2 - 1),
             ]
                 .as_ref(),
         )
