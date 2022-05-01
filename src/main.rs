@@ -1,31 +1,22 @@
 mod database;
 
 use database::*;
-use std::{io::{
-    self,
-    Result,
-}};
-use crossterm::{event, execute};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use tui::{
-    style::{
-        Style,
-        Color,
-    },
-    layout::{Constraint, Direction, Layout}, backend::Backend, Frame, widgets::{Block, Borders}, Terminal};
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event::{Key}},
-    terminal::{
-        EnterAlternateScreen,
-        LeaveAlternateScreen,
-    },
-};
-use crossterm::event::{KeyCode, KeyModifiers};
 use rusqlite::Connection;
-use tui::backend::CrosstermBackend;
-use tui::layout::Rect;
-use tui::widgets::{Clear, List, ListItem, Paragraph};
 use unicode_width::UnicodeWidthStr;
+use crossterm::event::{KeyCode, KeyModifiers};
+use std::{
+    io::{
+        self,
+        Result,
+    }
+};
+use tui::{Frame, Terminal, backend::Backend, style::{Style, Color}, backend::CrosstermBackend, layout::{Rect, Constraint, Direction, Layout}, widgets::{Block, Borders, Clear, List, ListItem, Paragraph}, symbols};
+use crossterm::{
+    execute,
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event::{Key}},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use tui::widgets::{BarChart};
 
 enum Screen {
     New,
@@ -34,58 +25,56 @@ enum Screen {
 }
 
 struct App {
+    day: usize,
+    index: usize,
+    input: String,
+    screen: Screen,
     db: Connection,
     todos: Vec<Todo>,
-    current_index: usize,
-    current_screen: Screen,
-    input_value: String,
 }
 
 impl App {
     fn new(db: Connection) -> Self {
+        let todos = get_todos(&db).expect("Error: Cannot load todos.");
         Self {
+            screen: if todos.is_empty() { Screen::New } else { Screen::Todos },
+            input: String::new(),
+            index: 0,
+            day: 0,
+            todos,
             db,
-            todos: vec![],
-            current_index: 0,
-            current_screen: Screen::Todos,
-            input_value: String::new(),
         }
     }
 
-    fn load_todos(&mut self) {
-        let todos = get_todos(&self.db).expect("Cannot get todos");
-        self.todos = todos;
-    }
-
     fn set_screen(&mut self, screen: Screen) {
-        self.current_screen = screen;
+        self.screen = screen;
     }
 
     fn swap(&mut self, index: usize) {
-        self.todos.swap(self.current_index, index);
-        update_todos_positions(&self.db, &self.todos).expect("Cannot update TODOs positions.")
+        self.todos.swap(self.index, index);
+        update_todos_positions(&self.db, &self.todos).expect("Error: Cannot update positions.")
     }
 
     fn next(&mut self, modifiers: KeyModifiers) {
-        if !self.todos.is_empty() && self.current_index < self.todos.len() - 1 {
+        if !self.todos.is_empty() && self.index < self.todos.len() - 1 {
             if modifiers == KeyModifiers::SHIFT {
-                self.swap(self.current_index + 1);
+                self.swap(self.index + 1);
             }
-            self.current_index += 1;
+            self.index += 1;
         }
     }
 
     fn previous(&mut self, modifiers: KeyModifiers) {
-        if !self.todos.is_empty() && self.current_index > 0 {
+        if !self.todos.is_empty() && self.index > 0 {
             if modifiers == KeyModifiers::SHIFT {
-                self.swap(self.current_index - 1);
+                self.swap(self.index - 1);
             }
-            self.current_index -= 1;
+            self.index -= 1;
         }
     }
 
     fn toggle(&mut self) {
-        if let Some(todo) = self.todos.get_mut(self.current_index) {
+        if let Some(todo) = self.todos.get_mut(self.index) {
             if toggle_todo(&self.db, todo.id).is_ok() {
                 todo.toggle();
             }
@@ -93,32 +82,32 @@ impl App {
     }
 
     fn create(&mut self) {
-        if let Ok(todo) = new_todo(&self.db, self.input_value.as_str()) {
-            self.input_value.clear();
+        if let Ok(todo) = new_todo(&self.db, self.input.as_str()) {
+            self.input.clear();
             self.todos.push(todo);
         }
     }
 
     fn delete(&mut self) {
-        if let Some(todo) = self.todos.get(self.current_index) {
+        if let Some(todo) = self.todos.get(self.index) {
             if delete_todo(&self.db, todo.id).is_ok() {
-                self.todos.remove(self.current_index);
+                self.todos.remove(self.index);
             }
         }
     }
 
-    fn draw_ui<B: Backend>(&self, f: &mut Frame<B>) {
-        match self.current_screen {
-            Screen::Todos => self.draw_todos(f),
-            Screen::Stats => {}
+    fn ui<B: Backend>(&self, f: &mut Frame<B>) {
+        match self.screen {
+            Screen::Todos => self.todos_screen(f),
+            Screen::Stats => self.stats_screen(f),
             Screen::New => {
-                self.draw_todos(f);
-                self.draw_new(f);
+                self.todos_screen(f);
+                self.new_screen(f);
             }
         }
     }
 
-    fn draw_todos<B: Backend>(&self, f: &mut Frame<B>) {
+    fn todos_screen<B: Backend>(&self, f: &mut Frame<B>) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .margin(1)
@@ -140,20 +129,75 @@ impl App {
         f.render_widget(block, chunks[1]);
     }
 
-    fn draw_new<B: Backend>(&self, f: &mut Frame<B>) {
-        let block = Paragraph::new(self.input_value.as_ref())
+    fn stats_screen<B: Backend>(&self, f: &mut Frame<B>) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(30),
+                    Constraint::Percentage(70)
+                ].as_ref()
+            )
+            .split(f.size());
+        let block = Block::default()
+            .title("Days")
+            .borders(Borders::ALL);
+        let data: [(&str, u64); 5] = [("*27.04.2022*", 100), ("-28.04.2022-", 90), ("29.04.2022", 80), ("30.04.2022", 20), ("01.05.2022", 40)];
+        let chart = BarChart::default()
+            .bar_width(12)
+            .bar_style(Style::default().fg(Color::Yellow))
+            .value_style(Style::default().fg(Color::White).bg(Color::Yellow))
+            .label_style(Style::default().fg(Color::White))
+            .data(&data)
+            .block(block);
+        f.render_widget(chart, chunks[0]);
+        let block = Block::default()
+            .title("Notes")
+            .borders(Borders::ALL);
+        f.render_widget(block, chunks[1]);
+    }
+
+    fn new_screen<B: Backend>(&self, f: &mut Frame<B>) {
+        let block = Paragraph::new(self.input.as_ref())
             .block(Block::default().title("New TODO").borders(Borders::ALL));
-        let area = input_rect(60, f.size());
+        let area = App::centered_input(60, f.size());
         f.render_widget(Clear, area);
         f.render_widget(block, area);
-        f.set_cursor(area.x + self.input_value.width() as u16 + 1, area.y + 1);
+        f.set_cursor(area.x + self.input.width() as u16 + 1, area.y + 1);
     }
 
     fn get_todos_list(&self) -> Vec<ListItem> {
         self.todos.iter().enumerate().map(|(index, todo)| {
             ListItem::new(todo.get_text())
-                .style(Style::default().fg(if index == self.current_index { Color::Yellow } else { Color::White }))
+                .style(Style::default().fg(if index == self.index { Color::Yellow } else { Color::White }))
         }).collect()
+    }
+
+    fn centered_input(percent_x: u16, r: Rect) -> Rect {
+        let popup_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(
+                [
+                    Constraint::Length(r.height / 2 - 1),
+                    Constraint::Min(3),
+                    Constraint::Length(r.height / 2 - 1),
+                ]
+                    .as_ref(),
+            )
+            .split(r);
+
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Percentage((100 - percent_x) / 2),
+                    Constraint::Percentage(percent_x),
+                    Constraint::Percentage((100 - percent_x) / 2),
+                ]
+                    .as_ref(),
+            )
+            .split(popup_layout[1])[1]
     }
 }
 
@@ -171,27 +215,25 @@ fn main() -> Result<()> {
 
     let mut app = App::new(db);
 
-    app.load_todos();
-
     loop {
-        terminal.draw(|f| app.draw_ui(f))?;
+        terminal.draw(|f| app.ui(f))?;
 
         if let Key(key) = event::read()? {
-            match app.current_screen {
+            match app.screen {
                 Screen::New => {
                     match key.code {
                         KeyCode::Esc => {
-                            app.input_value.clear();
+                            app.input.clear();
                             app.set_screen(Screen::Todos);
                         }
                         KeyCode::Backspace => {
-                            app.input_value.pop();
+                            app.input.pop();
                         }
                         KeyCode::Enter => {
                             app.set_screen(Screen::Todos);
                             app.create();
                         }
-                        KeyCode::Char(c) => app.input_value.push(c),
+                        KeyCode::Char(c) => app.input.push(c),
                         _ => {}
                     }
                 }
@@ -204,11 +246,21 @@ fn main() -> Result<()> {
                             'x' => app.toggle(),
                             'd' => app.delete(),
                             'n' => app.set_screen(Screen::New),
+                            's' => app.set_screen(Screen::Stats),
                             _ => {}
                         }
                     }
                 }
-                Screen::Stats => {}
+                Screen::Stats => {
+                    match key.code {
+                        KeyCode::Char('q') => break,
+                        KeyCode::Esc => {
+                            app.input.clear();
+                            app.set_screen(Screen::Todos);
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
     }
@@ -222,30 +274,4 @@ fn main() -> Result<()> {
     terminal.show_cursor()?;
 
     Ok(())
-}
-
-fn input_rect(percent_x: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Length(r.height / 2 - 1),
-                Constraint::Min(3),
-                Constraint::Length(r.height / 2 - 1),
-            ]
-                .as_ref(),
-        )
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ]
-                .as_ref(),
-        )
-        .split(popup_layout[1])[1]
 }
