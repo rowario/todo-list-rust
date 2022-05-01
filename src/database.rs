@@ -4,6 +4,7 @@ use rusqlite::{Connection, Result};
 pub struct Todo {
     pub id: i64,
     pub position: i64,
+    pub day_id: i64,
     pub text: String,
     pub completed: bool,
 }
@@ -22,14 +23,34 @@ impl Todo {
     }
 }
 
+#[derive(Debug)]
+pub struct Day {
+    pub id: i64,
+    pub count_todos: i64,
+    pub done_todos: i64,
+    pub notes: String,
+    pub date: String,
+}
+
 pub fn init(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS todos (
             id INTEGER PRIMARY KEY,
             position INTEGER,
+            day_id INTEGER,
             text TEXT NOT NULL,
             completed INTEGER NOT NULL
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS days (
+            id INTEGER PRIMARY KEY,
+            count_todos INTEGER NOT NULL,
+            done_todos INTEGER NOT NULL,
+            notes TEXT NOT NULL,
+            date TEXT NOT NULL
         )",
         [],
     )?;
