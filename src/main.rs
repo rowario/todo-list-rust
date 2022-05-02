@@ -10,6 +10,10 @@ use std::{
         Result,
     }
 };
+use std::borrow::Borrow;
+use std::ops::Deref;
+use std::panic::resume_unwind;
+use chrono::Utc;
 use tui::{Frame, Terminal, backend::Backend, style::{Style, Color}, backend::CrosstermBackend, layout::{Rect, Constraint, Direction, Layout}, widgets::{Block, Borders, Clear, List, ListItem, Paragraph}, symbols};
 use crossterm::{
     execute,
@@ -19,29 +23,34 @@ use crossterm::{
 use tui::widgets::{BarChart};
 
 enum Screen {
-    New,
+    NewDay,
+    NewTodo,
     Todos,
     Stats,
 }
 
 struct App {
-    day: usize,
     index: usize,
     input: String,
     screen: Screen,
     db: Connection,
-    todos: Vec<Todo>,
+    day: Day,
 }
 
 impl App {
     fn new(db: Connection) -> Self {
-        let todos = get_todos(&db).expect("Error: Cannot load todos.");
+        let days = get_days(&db).unwrap();
+        let day = if !days.is_empty() {
+            let result = days.last().unwrap();
+            get_day(&db, result.id).expect("Error: Cannot load todos.")
+        } else {
+            new_day(&db, Utc::today().format("%Y-%m-%d").to_string().as_str()).expect("Error: Cannot create new day.")
+        };
         Self {
-            screen: if todos.is_empty() { Screen::New } else { Screen::Todos },
+            screen: if day.todos.is_empty() { Screen::NewTodo } else { Screen::Todos },
             input: String::new(),
             index: 0,
-            day: 0,
-            todos,
+            day,
             db,
         }
     }
@@ -51,12 +60,12 @@ impl App {
     }
 
     fn swap(&mut self, index: usize) {
-        self.todos.swap(self.index, index);
-        update_todos_positions(&self.db, &self.todos).expect("Error: Cannot update positions.")
+        self.day.todos.swap(self.index, index);
+        update_todos_positions(&self.db, &self.day.todos).expect("Error: Cannot update positions.")
     }
 
     fn next(&mut self, modifiers: KeyModifiers) {
-        if !self.todos.is_empty() && self.index < self.todos.len() - 1 {
+        if !self.day.todos.is_empty() && self.index < self.day.todos.len() - 1 {
             if modifiers == KeyModifiers::SHIFT {
                 self.swap(self.index + 1);
             }
@@ -65,7 +74,7 @@ impl App {
     }
 
     fn previous(&mut self, modifiers: KeyModifiers) {
-        if !self.todos.is_empty() && self.index > 0 {
+        if !self.day.todos.is_empty() && self.index > 0 {
             if modifiers == KeyModifiers::SHIFT {
                 self.swap(self.index - 1);
             }
@@ -74,7 +83,7 @@ impl App {
     }
 
     fn toggle(&mut self) {
-        if let Some(todo) = self.todos.get_mut(self.index) {
+        if let Some(todo) = self.day.todos.get_mut(self.index) {
             if toggle_todo(&self.db, todo.id).is_ok() {
                 todo.toggle();
             }
@@ -82,28 +91,29 @@ impl App {
     }
 
     fn create(&mut self) {
-        if let Ok(todo) = new_todo(&self.db, self.input.as_str()) {
+        if let Ok(todo) = new_todo(&self.db, self.input.as_str(), self.day.id) {
             self.input.clear();
-            self.todos.push(todo);
+            self.day.todos.push(todo);
         }
     }
 
     fn delete(&mut self) {
-        if let Some(todo) = self.todos.get(self.index) {
+        if let Some(todo) = self.day.todos.get(self.index) {
             if delete_todo(&self.db, todo.id).is_ok() {
-                self.todos.remove(self.index);
+                self.day.todos.remove(self.index);
             }
         }
     }
 
     fn ui<B: Backend>(&self, f: &mut Frame<B>) {
         match self.screen {
-            Screen::Todos => self.todos_screen(f),
-            Screen::Stats => self.stats_screen(f),
-            Screen::New => {
+            Screen::NewDay => {}
+            Screen::NewTodo => {
                 self.todos_screen(f);
                 self.new_screen(f);
             }
+            Screen::Todos => self.todos_screen(f),
+            Screen::Stats => self.stats_screen(f),
         }
     }
 
@@ -119,7 +129,7 @@ impl App {
             )
             .split(f.size());
         let block = Block::default()
-            .title("TODOs")
+            .title(format!("TODOs | {}", self.day.date))
             .borders(Borders::ALL);
         let list = List::new(self.get_todos_list()).block(block);
         f.render_widget(list, chunks[0]);
@@ -168,7 +178,7 @@ impl App {
     }
 
     fn get_todos_list(&self) -> Vec<ListItem> {
-        self.todos.iter().enumerate().map(|(index, todo)| {
+        self.day.todos.iter().enumerate().map(|(index, todo)| {
             ListItem::new(todo.get_text())
                 .style(Style::default().fg(if index == self.index { Color::Yellow } else { Color::White }))
         }).collect()
@@ -220,7 +230,8 @@ fn main() -> Result<()> {
 
         if let Key(key) = event::read()? {
             match app.screen {
-                Screen::New => {
+                Screen::NewDay => {}
+                Screen::NewTodo => {
                     match key.code {
                         KeyCode::Esc => {
                             app.input.clear();
@@ -245,7 +256,7 @@ fn main() -> Result<()> {
                             'j' => app.next(key.modifiers),
                             'x' => app.toggle(),
                             'd' => app.delete(),
-                            'n' => app.set_screen(Screen::New),
+                            'n' => app.set_screen(Screen::NewTodo),
                             's' => app.set_screen(Screen::Stats),
                             _ => {}
                         }
