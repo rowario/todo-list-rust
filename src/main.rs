@@ -57,6 +57,13 @@ impl App {
         self.screen = screen;
     }
 
+    fn new_day(&mut self) {
+        let new_date = Utc::today().format("%Y-%m-%d").to_string();
+        if new_date != self.day.date {
+            self.day = new_day(&self.db, new_date.as_str()).unwrap();
+        }
+    }
+
     fn swap(&mut self, index: usize) {
         self.day.todos.swap(self.index, index);
         update_todos_positions(&self.db, &self.day.todos).expect("Error: Cannot update positions.")
@@ -89,7 +96,7 @@ impl App {
     }
 
     fn create(&mut self) {
-        if let Ok(todo) = new_todo(&self.db, self.input.as_str(), self.day.id) {
+        if let Ok(todo) = new_todo(&self.db, self.input.trim(), self.day.id) {
             self.input.clear();
             self.day.todos.push(todo);
         }
@@ -161,7 +168,12 @@ fn main() -> Result<()> {
                             'j' => app.next(key.modifiers),
                             'x' => app.toggle(),
                             'd' => app.delete(),
-                            'n' => app.set_screen(Screen::NewTodo),
+                            'n' => {
+                                if key.modifiers == KeyModifiers::SHIFT {
+                                    app.new_day();
+                                }
+                                app.set_screen(Screen::NewTodo);
+                            }
                             's' => app.set_screen(Screen::Stats),
                             _ => {}
                         }
