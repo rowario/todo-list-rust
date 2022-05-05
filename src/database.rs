@@ -97,7 +97,7 @@ pub fn new_day(conn: &Connection, date: &str) -> Result<Day> {
     conn.execute(
         "INSERT INTO days (count_todos, done_todos, notes, date) VALUES (0,0,'',?1)",
         &[date],
-    );
+    )?;
     let id = conn.last_insert_rowid();
     Ok(Day {
         id,
@@ -128,7 +128,7 @@ fn get_todos(conn: &Connection, day_id: i64) -> Result<Vec<Todo>> {
 pub fn new_todo(conn: &Connection, text: &str, day_id: i64) -> Result<Todo> {
     conn.execute(
         "INSERT INTO todos (text, completed, day_id) VALUES (?1, 0, ?2)",
-        &[&text, day_id.to_string().as_str()],
+        &[text, day_id.to_string().as_str()],
     )?;
     let last_id = conn.last_insert_rowid();
     conn.execute(
