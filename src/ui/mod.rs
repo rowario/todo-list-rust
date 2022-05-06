@@ -1,13 +1,15 @@
-use tui::backend::Backend;
-use tui::Frame;
-use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Style};
-use tui::text::Spans;
-use tui::widgets::{BarChart, Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use tui::{
+    backend::Backend,
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    text::Spans,
+    widgets::{BarChart, Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+};
 use unicode_width::UnicodeWidthStr;
 use crate::App;
 
-pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, active: bool) {
+pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, todos: bool) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .margin(1)
@@ -18,8 +20,8 @@ pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, active: bool) {
             ].as_ref()
         )
         .split(f.size());
-    todos_block(app, f, active, chunks[0]);
-    notes_block(app, f, false, chunks[1]);
+    todos_block(app, f, todos, chunks[0]);
+    notes_block(app, f, !todos, chunks[1]);
 }
 
 fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
