@@ -2,7 +2,8 @@ use tui::backend::Backend;
 use tui::Frame;
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Style};
-use tui::widgets::{BarChart, Block, Borders, Clear, List, ListItem, Paragraph};
+use tui::text::Spans;
+use tui::widgets::{BarChart, Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
 use crate::App;
 
@@ -17,18 +18,31 @@ pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, active: bool) {
             ].as_ref()
         )
         .split(f.size());
+    todos_block(app, f, active, chunks[0]);
+    notes_block(app, f, false, chunks[1]);
+}
+
+fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
     let block = Block::default()
         .title(format!("TODOs | {}", app.day.date))
         .borders(Borders::ALL).style(Style::default().fg(if active { Color::Yellow } else { Color::White }));
-    let list = List::new(get_todos_list(&app, active)).block(block);
-    f.render_widget(list, chunks[0]);
-    let block = Block::default()
-        .title("Notes")
-        .borders(Borders::ALL);
-    f.render_widget(block, chunks[1]);
+    let list = List::new(get_todos_list(app, active)).block(block);
+    f.render_widget(list, area);
 }
 
-pub fn stats_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
+fn notes_block<B: Backend>(_app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
+    let text = vec![
+        Spans::from("Test text lol rowario Test text lol rowario Test text lol rowario Test text lol rowario Test text lol rowario"),
+    ];
+    let block = Block::default()
+        .title("Notes")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(if active { Color::Yellow } else { Color::White }));
+    let text_block = Paragraph::new(text).wrap(Wrap { trim: false }).block(block);
+    f.render_widget(text_block, area);
+}
+
+pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
