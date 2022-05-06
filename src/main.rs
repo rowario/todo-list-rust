@@ -23,6 +23,7 @@ enum Screen {
     NewDay,
     NewTodo,
     Todos,
+    Notes,
     Stats,
 }
 
@@ -118,6 +119,7 @@ impl App {
                 new_screen(self, f);
             }
             Screen::Todos => todos_screen(self, f, true),
+            Screen::Notes => todos_screen(self, f, false),
             Screen::Stats => stats_screen(self, f),
         }
     }
@@ -166,6 +168,7 @@ fn main() -> Result<()> {
                             'q' => break,
                             'k' => app.previous(key.modifiers),
                             'j' => app.next(key.modifiers),
+                            'l' => app.set_screen(Screen::Notes),
                             'x' => app.toggle(),
                             'd' => app.delete(),
                             'n' => {
@@ -175,6 +178,15 @@ fn main() -> Result<()> {
                                 app.set_screen(Screen::NewTodo);
                             }
                             's' => app.set_screen(Screen::Stats),
+                            _ => {}
+                        }
+                    }
+                }
+                Screen::Notes => {
+                    if let KeyCode::Char(char) = key.code {
+                        match char.to_ascii_lowercase() {
+                            'q' => break,
+                            'h' => app.set_screen(Screen::Todos),
                             _ => {}
                         }
                     }
