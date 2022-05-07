@@ -37,13 +37,13 @@ pub struct App {
 
 impl App {
     fn new(db: Connection) -> Self {
-        let days = get_days(&db).unwrap();
+        let days = DayShort::get_all(&db).unwrap();
         let day = if !days.is_empty() {
             let result = days.last().unwrap();
-            get_day(&db, result.id).expect("Error: Cannot load todos.")
+            Day::get(&db, result.id).unwrap()
         } else {
-            new_day(&db, Utc::today().format("%Y-%m-%d").to_string().as_str())
-                .expect("Error: Cannot create new day.")
+            Day::new(&db, Utc::today().format("%Y-%m-%d").to_string().as_str())
+                .unwrap()
         };
         Self {
             screen: if day.todos.is_empty() { Screen::NewTodo } else { Screen::Todos },
@@ -61,13 +61,14 @@ impl App {
     fn new_day(&mut self) {
         let new_date = Utc::today().format("%Y-%m-%d").to_string();
         if new_date != self.day.date {
-            self.day = new_day(&self.db, new_date.as_str()).unwrap();
+            self.day = Day::new(&self.db, new_date.as_str()).unwrap();
+            self.index = 0;
         }
     }
 
     fn swap(&mut self, index: usize) {
         self.day.todos.swap(self.index, index);
-        update_todos_positions(&self.db, &self.day.todos).expect("Error: Cannot update positions.")
+        Todo::update_positions(&self.db, &self.day.todos).expect("Error: Cannot update positions.")
     }
 
     fn next(&mut self, modifiers: KeyModifiers) {
@@ -88,16 +89,8 @@ impl App {
         }
     }
 
-    fn toggle(&mut self) {
-        if let Some(todo) = self.day.todos.get_mut(self.index) {
-            if toggle_todo(&self.db, todo.id).is_ok() {
-                todo.toggle();
-            }
-        }
-    }
-
     fn create(&mut self) {
-        if let Ok(todo) = new_todo(&self.db, self.input.trim(), self.day.id) {
+        if let Ok(todo) = Todo::new(&self.db, self.input.trim(), self.day.id) {
             self.input.clear();
             self.day.todos.push(todo);
         }
@@ -105,7 +98,7 @@ impl App {
 
     fn delete(&mut self) {
         if let Some(todo) = self.day.todos.get(self.index) {
-            if delete_todo(&self.db, todo.id).is_ok() {
+            if todo.delete_todo(&self.db).is_ok() {
                 self.day.todos.remove(self.index);
             }
         }
@@ -135,7 +128,7 @@ fn main() -> Result<()> {
     let mut path = std::env::current_exe()?;
     path.pop();
     path.push("database.sqlite");
-    let db = init(path.to_str().unwrap()).expect("Error: failed to initialize database");
+    let db = init_connection(path.to_str().unwrap()).expect("Error: failed to initialize database");
 
     let mut app = App::new(db);
 
@@ -169,7 +162,11 @@ fn main() -> Result<()> {
                             'k' => app.previous(key.modifiers),
                             'j' => app.next(key.modifiers),
                             'l' => app.set_screen(Screen::Notes),
-                            'x' => app.toggle(),
+                            'x' => {
+                                if let Some(todo) = app.day.todos.get_mut(app.index) {
+                                    todo.toggle(&app.db).expect("Error: Cannot toggle todo.");
+                                }
+                            }
                             'd' => app.delete(),
                             'n' => {
                                 if key.modifiers == KeyModifiers::SHIFT {

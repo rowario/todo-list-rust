@@ -108,7 +108,7 @@ impl Day {
         let day = stmt.query_row([day_id], |r| {
             let id = r.get(0)?;
             let todos = Todo::get_all(db, id)?;
-            Ok(Day {
+            Ok(Self {
                 id,
                 count_todos: r.get(1)?,
                 done_todos: r.get(2)?,
@@ -119,7 +119,6 @@ impl Day {
         })?;
         Ok(day)
     }
-
 
     pub fn set_notes(&mut self, db: &Connection, notes: &str) -> Result<()> {
         db.execute(
