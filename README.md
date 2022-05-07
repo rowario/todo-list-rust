@@ -7,7 +7,7 @@ TODOs:
 - [x] move to TUI
 - [ ] daily statistics 
 - [ ] default todos list
-- [ ] notes
+- [x] notes
 - [x] moving tasks
  
 ![img.png](img.png)

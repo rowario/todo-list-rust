@@ -20,10 +20,10 @@ use crossterm::{
 };
 
 enum Screen {
-    NewDay,
     NewTodo,
     Todos,
     Notes,
+    EditNotes,
     Stats,
 }
 
@@ -90,29 +90,34 @@ impl App {
     }
 
     fn create(&mut self) {
-        if let Ok(todo) = Todo::new(&self.db, self.input.trim(), self.day.id) {
-            self.input.clear();
-            self.day.todos.push(todo);
+        if !self.input.trim().is_empty() {
+            if let Ok(todo) = Todo::new(&self.db, self.input.trim(), self.day.id) {
+                self.day.add_todo(&self.db, todo).expect("Error: Cannot add todo, to day.");
+            }
         }
+        self.input.clear();
     }
 
     fn delete(&mut self) {
         if let Some(todo) = self.day.todos.get(self.index) {
             if todo.delete_todo(&self.db).is_ok() {
-                self.day.todos.remove(self.index);
+                self.day.remove_todo(&self.db, self.index).expect("Error: Cannot remove todo.");
+                if self.index >= self.day.todos.len() && self.index != 0 {
+                    self.index -= 1;
+                }
             }
         }
     }
 
     fn ui<B: Backend>(&self, f: &mut Frame<B>) {
         match self.screen {
-            Screen::NewDay => {}
             Screen::NewTodo => {
                 todos_screen(self, f, false);
                 new_screen(self, f);
             }
             Screen::Todos => todos_screen(self, f, true),
             Screen::Notes => todos_screen(self, f, false),
+            Screen::EditNotes => todos_screen(self, f, false),
             Screen::Stats => stats_screen(self, f),
         }
     }
@@ -137,7 +142,6 @@ fn main() -> Result<()> {
 
         if let Key(key) = event::read()? {
             match app.screen {
-                Screen::NewDay => {}
                 Screen::NewTodo => {
                     match key.code {
                         KeyCode::Esc => {
@@ -183,9 +187,24 @@ fn main() -> Result<()> {
                     if let KeyCode::Char(char) = key.code {
                         match char.to_ascii_lowercase() {
                             'q' => break,
+                            'e' => app.set_screen(Screen::EditNotes),
                             'h' => app.set_screen(Screen::Todos),
                             _ => {}
                         }
+                    }
+                }
+                Screen::EditNotes => {
+                    match key.code {
+                        KeyCode::Esc => {
+                            app.set_screen(Screen::Notes);
+                            app.day.set_notes(&app.db).expect("Error: Cannot save notes.");
+                        }
+                        KeyCode::Backspace => {
+                            app.day.notes.pop();
+                        }
+                        KeyCode::Enter => app.day.notes.push('\n'),
+                        KeyCode::Char(c) => app.day.notes.push(c),
+                        _ => {}
                     }
                 }
                 Screen::Stats => {

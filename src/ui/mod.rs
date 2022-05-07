@@ -7,7 +7,7 @@ use tui::{
     widgets::{BarChart, Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
-use crate::App;
+use crate::{App, Screen};
 
 pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, todos: bool) {
     let chunks = Layout::default()
@@ -32,16 +32,33 @@ fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect
     f.render_widget(list, area);
 }
 
-fn notes_block<B: Backend>(_app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
-    let text = vec![
-        Spans::from("Test text lol rowario Test text lol rowario Test text lol rowario Test text lol rowario Test text lol rowario"),
-    ];
+fn notes_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
+    let text = String::from(&app.day.notes);
+    let text: Vec<Spans> = text.split('\n').map(|s| {
+        Spans::from(s.trim_start())
+    }).collect();
     let block = Block::default()
-        .title("Notes")
+        .title(format!("Notes{}", if matches!(app.screen, Screen::EditNotes) { "*" } else { "" }))
         .borders(Borders::ALL)
         .style(Style::default().fg(if active { Color::Yellow } else { Color::White }));
-    let text_block = Paragraph::new(text).wrap(Wrap { trim: false }).block(block);
+    let text_block = Paragraph::new(text.clone())
+        .wrap(Wrap { trim: false })
+        .style(Style::default().fg(Color::White))
+        .block(block);
     f.render_widget(text_block, area);
+    if matches!(app.screen,Screen::EditNotes) {
+        let x = if !text.is_empty() {
+            area.x + 1 + text.last().unwrap().width() as u16
+        } else {
+            area.x + 1
+        };
+        let y = if !text.is_empty() {
+            area.y + text.len() as u16
+        } else {
+            area.y
+        };
+        f.set_cursor(x, y);
+    }
 }
 
 pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {

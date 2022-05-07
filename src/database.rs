@@ -120,12 +120,11 @@ impl Day {
         Ok(day)
     }
 
-    pub fn set_notes(&mut self, db: &Connection, notes: &str) -> Result<()> {
+    pub fn set_notes(&mut self, db: &Connection) -> Result<()> {
         db.execute(
             "UPDATE days SET notes = ?1 WHERE id = ?2",
-            &[&notes, self.id.to_string().as_str()],
+            &[&self.notes, self.id.to_string().as_str()],
         )?;
-        self.notes = String::from(notes);
         Ok(())
     }
 
