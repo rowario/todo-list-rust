@@ -21,7 +21,7 @@ pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, todos: bool) {
         )
         .split(f.size());
     todos_block(app, f, todos, chunks[0]);
-    notes_block(app, f, !todos, chunks[1]);
+    notes_block(app, f, !todos && !matches!(app.screen,Screen::NewTodo), chunks[1]);
 }
 
 fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
