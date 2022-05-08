@@ -24,7 +24,69 @@ enum Screen {
     Todos,
     Notes,
     EditNotes,
+    NewDailyTodo,
+    DailyTodos,
     Stats,
+}
+
+struct DailyTodoList {
+    index: usize,
+    input: String,
+    list: Vec<DailyTodo>,
+}
+
+impl DailyTodoList {
+    pub fn new(db: &Connection) -> Result<Self> {
+        let list = DailyTodo::get_all(&db).unwrap();
+        Ok(Self {
+            index: 0,
+            input: String::new(),
+            list,
+        })
+    }
+
+    fn swap(&mut self, db: &Connection, index: usize) {
+        self.list.swap(self.index, index);
+        DailyTodo::update_positions(db, &self.list).expect("Error: Cannot update positions.")
+    }
+
+    fn next(&mut self, db: &Connection, modifiers: KeyModifiers) {
+        if !self.list.is_empty() && self.index < self.list.len() - 1 {
+            if modifiers == KeyModifiers::SHIFT {
+                self.swap(db, self.index + 1);
+            }
+            self.index += 1;
+        }
+    }
+
+    fn previous(&mut self, db: &Connection, modifiers: KeyModifiers) {
+        if !self.list.is_empty() && self.index > 0 {
+            if modifiers == KeyModifiers::SHIFT {
+                self.swap(db, self.index - 1);
+            }
+            self.index -= 1;
+        }
+    }
+
+    fn create(&mut self, db: &Connection) {
+        if !self.input.trim().is_empty() {
+            if let Ok(todo) = DailyTodo::new(db, self.input.trim()) {
+                self.list.push(todo);
+            }
+        }
+        self.input.clear();
+    }
+
+    fn delete(&mut self, db: &Connection) {
+        if let Some(todo) = self.list.get(self.index) {
+            if todo.delete(db).is_ok() {
+                self.list.remove(self.index);
+                if self.index >= self.list.len() && self.index != 0 {
+                    self.index -= 1;
+                }
+            }
+        }
+    }
 }
 
 pub struct App {
@@ -33,6 +95,7 @@ pub struct App {
     screen: Screen,
     db: Connection,
     day: Day,
+    daily_todos: DailyTodoList,
 }
 
 impl App {
@@ -45,12 +108,14 @@ impl App {
             Day::new(&db, Utc::today().format("%Y-%m-%d").to_string().as_str())
                 .unwrap()
         };
+        let daily_todos = DailyTodoList::new(&db).unwrap();
         Self {
             screen: if day.todos.is_empty() { Screen::NewTodo } else { Screen::Todos },
             input: String::new(),
             index: 0,
             day,
             db,
+            daily_todos,
         }
     }
 
@@ -113,11 +178,20 @@ impl App {
         match self.screen {
             Screen::NewTodo => {
                 todos_screen(self, f, false);
-                new_screen(self, f);
+                new_todo_screen(self, f);
             }
             Screen::Todos => todos_screen(self, f, true),
             Screen::Notes => todos_screen(self, f, false),
             Screen::EditNotes => todos_screen(self, f, false),
+            Screen::NewDailyTodo => {
+                todos_screen(self, f, false);
+                daily_todos_screen(self, f, false);
+                new_daily_todo_screen(self, f);
+            }
+            Screen::DailyTodos => {
+                todos_screen(self, f, false);
+                daily_todos_screen(self, f, true);
+            }
             Screen::Stats => stats_screen(self, f),
         }
     }
@@ -175,12 +249,48 @@ fn main() -> Result<()> {
                             'n' => {
                                 if key.modifiers == KeyModifiers::SHIFT {
                                     app.new_day();
+                                } else {
+                                    app.set_screen(Screen::NewTodo);
                                 }
-                                app.set_screen(Screen::NewTodo);
                             }
+                            't' => app.set_screen(Screen::DailyTodos),
                             's' => app.set_screen(Screen::Stats),
                             _ => {}
                         }
+                    }
+                }
+                Screen::NewDailyTodo => {
+                    match key.code {
+                        KeyCode::Esc => {
+                            app.daily_todos.input.clear();
+                            app.set_screen(Screen::DailyTodos);
+                        }
+                        KeyCode::Backspace => {
+                            app.daily_todos.input.pop();
+                        }
+                        KeyCode::Enter => {
+                            app.set_screen(Screen::DailyTodos);
+                            app.daily_todos.create(&app.db);
+                        }
+                        KeyCode::Char(c) => app.daily_todos.input.push(c),
+                        _ => {}
+                    }
+                }
+                Screen::DailyTodos => {
+                    match key.code {
+                        KeyCode::Esc => {
+                            app.set_screen(Screen::Todos);
+                        }
+                        KeyCode::Char(c) => {
+                            match c.to_ascii_lowercase() {
+                                'j' => app.daily_todos.next(&app.db, key.modifiers),
+                                'k' => app.daily_todos.previous(&app.db, key.modifiers),
+                                'n' => app.set_screen(Screen::NewDailyTodo),
+                                'd' => app.daily_todos.delete(&app.db),
+                                _ => {}
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 Screen::Notes => {
@@ -188,6 +298,7 @@ fn main() -> Result<()> {
                         match char.to_ascii_lowercase() {
                             'q' => break,
                             'e' => app.set_screen(Screen::EditNotes),
+                            't' => app.set_screen(Screen::DailyTodos),
                             'h' => app.set_screen(Screen::Todos),
                             _ => {}
                         }

@@ -79,6 +79,7 @@ impl Todo {
 
 pub struct DailyTodo {
     pub id: i64,
+    pub position: i64,
     pub text: String,
 }
 
@@ -89,18 +90,24 @@ impl DailyTodo {
             &[text],
         )?;
         let id = db.last_insert_rowid();
+        db.execute(
+            "UPDATE daily_todos SET position = ?1 WHERE id = ?2",
+            &[&id, &id],
+        )?;
         Ok(Self {
             id,
+            position: id,
             text: String::from(text),
         })
     }
 
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
-        let mut stmt = db.prepare("SELECT id, text FROM daily_todos")?;
+        let mut stmt = db.prepare("SELECT id, position, text FROM daily_todos")?;
         let days: Vec<Self> = stmt.query_map([], |r| {
             Ok(Self {
                 id: r.get(0)?,
-                text: r.get(1)?,
+                position: r.get(1)?,
+                text: r.get(2)?,
             })
         })?
             .filter_map(Result::ok)
@@ -108,7 +115,21 @@ impl DailyTodo {
         Ok(days)
     }
 
-    pub fn delete(&mut self, db: &Connection) -> Result<()> {
+    pub fn update_positions(db: &Connection, todos: &[Self]) -> Result<()> {
+        for (i, todo) in todos.iter().enumerate() {
+            db.execute(
+                "UPDATE daily_todos SET position = ?1 WHERE id = ?2",
+                &[&i.to_string().as_str(), &todo.id.to_string().as_str()],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_text(&self) -> String {
+        self.text.to_string()
+    }
+
+    pub fn delete(&self, db: &Connection) -> Result<()> {
         db.execute("DELETE FROM daily_todos WHERE id = ?1", &[&self.id])?;
         Ok(())
     }
@@ -130,13 +151,18 @@ impl Day {
             &[date],
         )?;
         let id = db.last_insert_rowid();
+        let daily_todos = DailyTodo::get_all(db)?;
+        let todos: Vec<Todo> = daily_todos.iter().map(|todo| {
+            Todo::new(db, &todo.text, id).unwrap()
+        })
+            .collect();
         Ok(Self {
             id,
             count_todos: 0,
             done_todos: 0,
             notes: String::new(),
             date: String::from(date),
-            todos: vec![],
+            todos,
         })
     }
 
@@ -227,6 +253,14 @@ pub fn init_connection(path: &str) -> Result<Connection> {
             done_todos INTEGER NOT NULL,
             notes TEXT NOT NULL,
             date TEXT NOT NULL
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS daily_todos (
+            id INTEGER PRIMARY KEY,
+            position INTEGER,
+            text TEXT NOT NULL
         )",
         [],
     )?;

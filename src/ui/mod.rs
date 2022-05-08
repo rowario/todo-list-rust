@@ -21,7 +21,7 @@ pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, todos: bool) {
         )
         .split(f.size());
     todos_block(app, f, todos, chunks[0]);
-    notes_block(app, f, !todos && !matches!(app.screen,Screen::NewTodo), chunks[1]);
+    notes_block(app, f, !todos && !matches!(app.screen,Screen::NewTodo | Screen::DailyTodos | Screen::NewDailyTodo), chunks[1]);
 }
 
 fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
@@ -61,6 +61,19 @@ fn notes_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect
     }
 }
 
+pub fn daily_todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, active: bool) {
+    let block = List::new(get_daily_todos_list(app, active))
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default().title("Daily TODOs")
+                .borders(Borders::ALL)
+                .style(Style::default().fg(if active { Color::Yellow } else { Color::White }))
+        );
+    let area = centered_rect(30, 50, f.size());
+    f.render_widget(Clear, area);
+    f.render_widget(block, area);
+}
+
 pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -90,7 +103,16 @@ pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {
     f.render_widget(block, chunks[1]);
 }
 
-pub fn new_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
+pub fn new_daily_todo_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
+    let block = Paragraph::new(app.daily_todos.input.as_ref()).style(Style::default().fg(Color::White))
+        .block(Block::default().title("New Daily TODO").borders(Borders::ALL).style(Style::default().fg(Color::Yellow)));
+    let area = centered_input(60, f.size());
+    f.render_widget(Clear, area);
+    f.render_widget(block, area);
+    f.set_cursor(area.x + app.daily_todos.input.width() as u16 + 1, area.y + 1);
+}
+
+pub fn new_todo_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
     let block = Paragraph::new(app.input.as_ref()).style(Style::default().fg(Color::White))
         .block(Block::default().title("New TODO").borders(Borders::ALL).style(Style::default().fg(Color::Yellow)));
     let area = centered_input(60, f.size());
@@ -106,6 +128,13 @@ pub fn get_todos_list(app: &App, active: bool) -> Vec<ListItem> {
     }).collect()
 }
 
+pub fn get_daily_todos_list(app: &App, active: bool) -> Vec<ListItem> {
+    app.daily_todos.list.iter().enumerate().map(|(index, todo)| {
+        ListItem::new(todo.get_text())
+            .style(Style::default().fg(if index == app.daily_todos.index && active { Color::Yellow } else { Color::White }))
+    }).collect()
+}
+
 pub fn centered_input(percent_x: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -114,6 +143,32 @@ pub fn centered_input(percent_x: u16, r: Rect) -> Rect {
                 Constraint::Length(r.height / 2 - 1),
                 Constraint::Min(3),
                 Constraint::Length(r.height / 2 - 1),
+            ]
+                .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+                .as_ref(),
+        )
+        .split(popup_layout[1])[1]
+}
+
+pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
             ]
                 .as_ref(),
         )
