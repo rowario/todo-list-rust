@@ -61,7 +61,7 @@ impl Todo {
         Ok(())
     }
 
-    pub fn delete_todo(&self, db: &Connection) -> Result<()> {
+    pub fn delete(&self, db: &Connection) -> Result<()> {
         db.execute("DELETE FROM todos WHERE id = ?1", &[&self.id])?;
         Ok(())
     }
@@ -73,6 +73,43 @@ impl Todo {
                 &[&i.to_string().as_str(), &todo.id.to_string().as_str()],
             )?;
         }
+        Ok(())
+    }
+}
+
+pub struct DailyTodo {
+    pub id: i64,
+    pub text: String,
+}
+
+impl DailyTodo {
+    pub fn new(db: &Connection, text: &str) -> Result<Self> {
+        db.execute(
+            "INSERT INTO daily_todos (text) VALUES (?1)",
+            &[text],
+        )?;
+        let id = db.last_insert_rowid();
+        Ok(Self {
+            id,
+            text: String::from(text),
+        })
+    }
+
+    pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
+        let mut stmt = db.prepare("SELECT id, text FROM daily_todos")?;
+        let days: Vec<Self> = stmt.query_map([], |r| {
+            Ok(Self {
+                id: r.get(0)?,
+                text: r.get(1)?,
+            })
+        })?
+            .filter_map(Result::ok)
+            .collect();
+        Ok(days)
+    }
+
+    pub fn delete(&mut self, db: &Connection) -> Result<()> {
+        db.execute("DELETE FROM daily_todos WHERE id = ?1", &[&self.id])?;
         Ok(())
     }
 }
@@ -160,7 +197,7 @@ impl DayShort {
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
         let mut stmt = db.prepare("SELECT id, date FROM days")?;
         let days: Vec<Self> = stmt.query_map([], |r| {
-            Ok(DayShort {
+            Ok(Self {
                 id: r.get(0)?,
                 date: r.get(1)?,
             })

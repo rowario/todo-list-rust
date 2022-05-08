@@ -100,7 +100,7 @@ impl App {
 
     fn delete(&mut self) {
         if let Some(todo) = self.day.todos.get(self.index) {
-            if todo.delete_todo(&self.db).is_ok() {
+            if todo.delete(&self.db).is_ok() {
                 self.day.remove_todo(&self.db, self.index).expect("Error: Cannot remove todo.");
                 if self.index >= self.day.todos.len() && self.index != 0 {
                     self.index -= 1;
