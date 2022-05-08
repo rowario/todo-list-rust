@@ -102,7 +102,7 @@ impl DailyTodo {
     }
 
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
-        let mut stmt = db.prepare("SELECT id, position, text FROM daily_todos")?;
+        let mut stmt = db.prepare("SELECT id, position, text FROM daily_todos ORDER BY position ASC")?;
         let days: Vec<Self> = stmt.query_map([], |r| {
             Ok(Self {
                 id: r.get(0)?,
