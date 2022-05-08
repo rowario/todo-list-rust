@@ -4,13 +4,14 @@ Stored all data in sqlite database.
 
 TODOs:
 
-- [x] move to TUI
-- [ ] daily statistics 
-- [ ] default todos list
 - [x] notes
-- [x] moving tasks
+- [x] daily todos
+- [ ] statistics 
+- [ ] rewrite app, list structs
  
+UI Preview:
 ![img.png](img.png)
 ![img_1.png](img_1.png)
-
+![img_2.png](img_2.png)
+![img_3.png](img_3.png)
 <kbd>Shift</kbd> + <kbd>j</kbd><kbd>k</kbd> to move task.
