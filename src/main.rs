@@ -37,7 +37,7 @@ struct DailyTodoList {
 
 impl DailyTodoList {
     pub fn new(db: &Connection) -> Result<Self> {
-        let list = DailyTodo::get_all(&db).unwrap();
+        let list = DailyTodo::get_all(db).unwrap();
         Ok(Self {
             index: 0,
             input: String::new(),

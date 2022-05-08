@@ -152,9 +152,8 @@ impl Day {
         )?;
         let id = db.last_insert_rowid();
         let daily_todos = DailyTodo::get_all(db)?;
-        let todos: Vec<Todo> = daily_todos.iter().map(|todo| {
-            Todo::new(db, &todo.text, id).unwrap()
-        })
+        let todos: Vec<Todo> = daily_todos.iter()
+            .map(|todo| Todo::new(db, &todo.text, id).unwrap())
             .collect();
         Ok(Self {
             id,
