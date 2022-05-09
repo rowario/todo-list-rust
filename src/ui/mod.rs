@@ -97,7 +97,7 @@ pub fn stats_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
         .split(chunks[1]);
     let block = Block::default()
         .title("Days")
-        .borders(Borders::ALL);
+        .borders(Borders::ALL).style(Style::default().fg(Color::Yellow));
     let data: Vec<(String, u64)> = app.stats_list.list.iter().enumerate()
         .map(|(index, d)| {
             ((if index == app.stats_list.index { format!("*{}*", &d.date) } else { format!("-{}-", &d.date) }), d.done as u64)
