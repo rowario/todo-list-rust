@@ -21,7 +21,8 @@ pub fn todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, todos: bool) {
         )
         .split(f.size());
     todos_block(app, f, todos, chunks[0]);
-    notes_block(app, f, !todos && !matches!(app.screen,Screen::NewTodo | Screen::DailyTodos | Screen::NewDailyTodo), chunks[1]);
+    let active_notes = !todos && !matches!(app.screen,Screen::NewTodo | Screen::DailyTodos | Screen::NewDailyTodo);
+    notes_block(app, f, &app.day.notes, active_notes, chunks[1]);
 }
 
 fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
@@ -32,8 +33,8 @@ fn todos_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect
     f.render_widget(list, area);
 }
 
-fn notes_block<B: Backend>(app: &App, f: &mut Frame<B>, active: bool, area: Rect) {
-    let text = String::from(&app.day.notes);
+fn notes_block<B: Backend>(app: &App, f: &mut Frame<B>, text: &str, active: bool, area: Rect) {
+    let text = String::from(text);
     let text: Vec<Spans> = text.split('\n').map(|s| {
         Spans::from(s.trim_start())
     }).collect();
@@ -74,21 +75,39 @@ pub fn daily_todos_screen<B: Backend>(app: &App, f: &mut Frame<B>, active: bool)
     f.render_widget(block, area);
 }
 
-pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {
+pub fn stats_screen<B: Backend>(app: &App, f: &mut Frame<B>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
+        .constraints(
+            [
+                Constraint::Percentage(20),
+                Constraint::Percentage(80)
+            ].as_ref()
+        )
+        .split(f.size());
+    let chunks2 = Layout::default()
+        .direction(Direction::Horizontal)
         .constraints(
             [
                 Constraint::Percentage(30),
                 Constraint::Percentage(70)
             ].as_ref()
         )
-        .split(f.size());
+        .split(chunks[1]);
     let block = Block::default()
         .title("Days")
         .borders(Borders::ALL);
-    let data: [(&str, u64); 5] = [("*27.04.2022*", 100), ("-28.04.2022-", 90), ("29.04.2022", 80), ("30.04.2022", 20), ("01.05.2022", 40)];
+    let data: Vec<(String, u64)> = app.stats_list.list.iter().enumerate()
+        .map(|(index, d)| {
+            ((if index == app.stats_list.index { format!("*{}*", &d.date) } else { format!("-{}-", &d.date) }), d.done as u64)
+        })
+        .collect();
+    let data: Vec<(&str, u64)> = data.iter()
+        .map(|d| {
+            (d.0.as_str(), d.1 as u64)
+        })
+        .collect();
     let chart = BarChart::default()
         .bar_width(12)
         .bar_style(Style::default().fg(Color::Yellow))
@@ -97,10 +116,17 @@ pub fn stats_screen<B: Backend>(_app: &App, f: &mut Frame<B>) {
         .data(&data)
         .block(block);
     f.render_widget(chart, chunks[0]);
-    let block = Block::default()
-        .title("Notes")
-        .borders(Borders::ALL);
-    f.render_widget(block, chunks[1]);
+    let current_day = app.stats_list.get_current(&app.db).unwrap();
+    let todos_list: Vec<ListItem> = current_day.todos.iter()
+        .map(|todo| ListItem::new(todo.get_text()))
+        .collect();
+    let todos_block = List::new(todos_list).block(
+        Block::default()
+            .title(format!("TODOs | {}", current_day.date))
+            .borders(Borders::ALL).style(Style::default().fg(Color::White))
+    );
+    f.render_widget(todos_block, chunks2[0]);
+    notes_block(app, f, &current_day.notes, false, chunks2[1]);
 }
 
 pub fn new_daily_todo_screen<B: Backend>(app: &App, f: &mut Frame<B>) {

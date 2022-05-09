@@ -216,15 +216,21 @@ impl Day {
 pub struct DayShort {
     pub id: i64,
     pub date: String,
+    pub string: String,
+    pub done: usize,
 }
 
 impl DayShort {
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
-        let mut stmt = db.prepare("SELECT id, date FROM days")?;
+        let mut stmt = db.prepare("SELECT id, date, count_todos, done_todos FROM days")?;
         let days: Vec<Self> = stmt.query_map([], |r| {
+            let count: usize = r.get(2)?;
+            let done: usize = r.get(3)?;
             Ok(Self {
                 id: r.get(0)?,
                 date: r.get(1)?,
+                string: format!("{}/{}", done, count),
+                done,
             })
         })?
             .filter_map(Result::ok)

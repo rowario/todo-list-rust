@@ -15,7 +15,7 @@ use chrono::Utc;
 use tui::{Frame, Terminal, backend::Backend, backend::CrosstermBackend};
 use crossterm::{
     execute,
-    event::{self, DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers, Event::{Key}},
+    event::{self, DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers, Event::Key},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 
@@ -89,6 +89,54 @@ impl DailyTodoList {
     }
 }
 
+struct StatsList {
+    index: usize,
+    list: Vec<DayShort>,
+}
+
+impl StatsList {
+    pub fn new(db: &Connection) -> Result<Self> {
+        let list = DayShort::get_all(db).unwrap();
+        Ok(Self {
+            index: list.len() - 1,
+            list,
+        })
+    }
+
+    pub fn update(&mut self, db: &Connection) -> Result<()> {
+        self.list = DayShort::get_all(db).unwrap();
+        Ok(())
+    }
+
+    pub fn get_current(&self, db: &Connection) -> Result<Day> {
+        if let Some(day) = self.list.get(self.index) {
+            let day = Day::get(db, day.id).unwrap();
+            Ok(day)
+        } else {
+            Ok(Day {
+                id: 0,
+                count_todos: 0,
+                done_todos: 0,
+                notes: String::new(),
+                date: String::from("0000-00-00"),
+                todos: vec![],
+            })
+        }
+    }
+
+    fn next(&mut self) {
+        if !self.list.is_empty() && self.index < self.list.len() - 1 {
+            self.index += 1;
+        }
+    }
+
+    fn previous(&mut self) {
+        if !self.list.is_empty() && self.index > 0 {
+            self.index -= 1;
+        }
+    }
+}
+
 pub struct App {
     index: usize,
     input: String,
@@ -96,6 +144,7 @@ pub struct App {
     db: Connection,
     day: Day,
     daily_todos: DailyTodoList,
+    stats_list: StatsList,
 }
 
 impl App {
@@ -109,6 +158,7 @@ impl App {
                 .unwrap()
         };
         let daily_todos = DailyTodoList::new(&db).unwrap();
+        let stats_list = StatsList::new(&db).unwrap();
         Self {
             screen: if day.todos.is_empty() { Screen::NewTodo } else { Screen::Todos },
             input: String::new(),
@@ -116,6 +166,7 @@ impl App {
             day,
             db,
             daily_todos,
+            stats_list,
         }
     }
 
@@ -158,6 +209,7 @@ impl App {
         if !self.input.trim().is_empty() {
             if let Ok(todo) = Todo::new(&self.db, self.input.trim(), self.day.id) {
                 self.day.add_todo(&self.db, todo).expect("Error: Cannot add todo, to day.");
+                self.stats_list.update(&self.db).unwrap();
             }
         }
         self.input.clear();
@@ -167,6 +219,7 @@ impl App {
         if let Some(todo) = self.day.todos.get(self.index) {
             if todo.delete(&self.db).is_ok() {
                 self.day.remove_todo(&self.db, self.index).expect("Error: Cannot remove todo.");
+                self.stats_list.update(&self.db).unwrap();
                 if self.index >= self.day.todos.len() && self.index != 0 {
                     self.index -= 1;
                 }
@@ -243,6 +296,8 @@ fn main() -> Result<()> {
                             'x' => {
                                 if let Some(todo) = app.day.todos.get_mut(app.index) {
                                     todo.toggle(&app.db).expect("Error: Cannot toggle todo.");
+                                    app.day.update_counts(&app.db).unwrap();
+                                    app.stats_list.update(&app.db).unwrap();
                                 }
                             }
                             'd' => app.delete(),
@@ -321,7 +376,9 @@ fn main() -> Result<()> {
                 Screen::Stats => {
                     match key.code {
                         KeyCode::Char('q') => break,
-                        KeyCode::Esc => {
+                        KeyCode::Char('h') => app.stats_list.previous(),
+                        KeyCode::Char('l') => app.stats_list.next(),
+                        KeyCode::Char('s') | KeyCode::Esc => {
                             app.input.clear();
                             app.set_screen(Screen::Todos);
                         }
