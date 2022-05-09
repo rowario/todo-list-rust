@@ -6,8 +6,9 @@ TODOs:
 
 - [x] notes
 - [x] daily todos
-- [ ] statistics 
-- [ ] rewrite app, list structs
+- [x] statistics 
+- [ ] screens traits
+- [ ] ?move to some orm?
  
 UI Preview:
 ![img.png](img.png)
