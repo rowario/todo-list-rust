@@ -7,7 +7,7 @@ TODOs:
 - [x] notes
 - [x] daily todos
 - [x] statistics 
-- [ ] screens traits
+- [ ] screen trait
 - [ ] ?move to some orm?
  
 UI Preview:
