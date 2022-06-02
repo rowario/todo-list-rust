@@ -251,7 +251,6 @@ impl App {
 }
 
 fn main() -> Result<()> {
-    enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
@@ -264,6 +263,7 @@ fn main() -> Result<()> {
 
     let mut app = App::new(db);
 
+    enable_raw_mode()?;
     loop {
         terminal.draw(|f| app.ui(f))?;
 
