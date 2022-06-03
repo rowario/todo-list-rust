@@ -5,11 +5,9 @@ use database::*;
 use ui::*;
 
 use rusqlite::Connection;
-use std::{
-    io::{
-        self,
-        Result,
-    }
+use std::io::{
+    self,
+    Result,
 };
 use chrono::Utc;
 use tui::{Frame, Terminal, backend::Backend, backend::CrosstermBackend};
@@ -390,11 +388,7 @@ fn main() -> Result<()> {
     }
 
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(),LeaveAlternateScreen,DisableMouseCapture)?;
     terminal.show_cursor()?;
 
     Ok(())
