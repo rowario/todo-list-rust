@@ -9,7 +9,7 @@ use std::io::{
     self,
     Result,
 };
-use chrono::Utc;
+use chrono::Local;
 use tui::{Frame, Terminal, backend::Backend, backend::CrosstermBackend};
 use crossterm::{
     execute,
@@ -152,7 +152,7 @@ impl App {
             let result = days.last().unwrap();
             Day::get(&db, result.id).unwrap()
         } else {
-            Day::new(&db, Utc::today().format("%Y-%m-%d").to_string().as_str())
+            Day::new(&db, Local::today().format("%Y-%m-%d").to_string().as_str())
                 .unwrap()
         };
         let daily_todos = DailyTodoList::new(&db).unwrap();
@@ -173,7 +173,7 @@ impl App {
     }
 
     fn new_day(&mut self) {
-        let new_date = Utc::today().format("%Y-%m-%d").to_string();
+        let new_date = Local::today().format("%Y-%m-%d").to_string();
         if new_date != self.day.date {
             self.day = Day::new(&self.db, new_date.as_str()).unwrap();
             self.index = 0;
