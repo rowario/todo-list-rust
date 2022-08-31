@@ -1,21 +1,18 @@
 mod database;
 mod ui;
 
-use database::*;
-use ui::*;
+use database::{init_connection, DailyTodo, Day, DayShort, Todo};
+use ui::{daily_todos_screen, new_daily_todo_screen, new_todo_screen, stats_screen, todos_screen};
 
-use rusqlite::Connection;
-use std::io::{
-    self,
-    Result,
-};
 use chrono::Local;
-use tui::{Frame, Terminal, backend::Backend, backend::CrosstermBackend};
 use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event::Key, KeyCode, KeyModifiers},
     execute,
-    event::{self, DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers, Event::Key},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use rusqlite::Connection;
+use std::io;
+use tui::{backend::Backend, backend::CrosstermBackend, Frame, Terminal};
 
 enum Screen {
     NewTodo,
@@ -34,7 +31,7 @@ struct DailyTodoList {
 }
 
 impl DailyTodoList {
-    pub fn new(db: &Connection) -> Result<Self> {
+    pub fn new(db: &Connection) -> io::Result<Self> {
         let list = DailyTodo::get_all(db).unwrap();
         Ok(Self {
             index: 0,
@@ -93,7 +90,7 @@ struct StatsList {
 }
 
 impl StatsList {
-    pub fn new(db: &Connection) -> Result<Self> {
+    pub fn new(db: &Connection) -> io::Result<Self> {
         let list = DayShort::get_all(db).unwrap();
         Ok(Self {
             index: list.len() - 1,
@@ -101,12 +98,12 @@ impl StatsList {
         })
     }
 
-    pub fn update(&mut self, db: &Connection) -> Result<()> {
+    pub fn update(&mut self, db: &Connection) -> io::Result<()> {
         self.list = DayShort::get_all(db).unwrap();
         Ok(())
     }
 
-    pub fn get_current(&self, db: &Connection) -> Result<Day> {
+    pub fn get_current(&self, db: &Connection) -> io::Result<Day> {
         if let Some(day) = self.list.get(self.index) {
             let day = Day::get(db, day.id).unwrap();
             Ok(day)
@@ -152,13 +149,16 @@ impl App {
             let result = days.last().unwrap();
             Day::get(&db, result.id).unwrap()
         } else {
-            Day::new(&db, Local::today().format("%Y-%m-%d").to_string().as_str())
-                .unwrap()
+            Day::new(&db, Local::today().format("%Y-%m-%d").to_string().as_str()).unwrap()
         };
         let daily_todos = DailyTodoList::new(&db).unwrap();
         let stats_list = StatsList::new(&db).unwrap();
         Self {
-            screen: if day.todos.is_empty() { Screen::NewTodo } else { Screen::Todos },
+            screen: if day.todos.is_empty() {
+                Screen::NewTodo
+            } else {
+                Screen::Todos
+            },
             input: String::new(),
             index: 0,
             day,
@@ -206,7 +206,9 @@ impl App {
     fn create(&mut self) {
         if !self.input.trim().is_empty() {
             if let Ok(todo) = Todo::new(&self.db, self.input.trim(), self.day.id) {
-                self.day.add_todo(&self.db, todo).expect("Error: Cannot add todo, to day.");
+                self.day
+                    .add_todo(&self.db, todo)
+                    .expect("Error: Cannot add todo, to day.");
                 self.stats_list.update(&self.db).unwrap();
             }
         }
@@ -216,7 +218,9 @@ impl App {
     fn delete(&mut self) {
         if let Some(todo) = self.day.todos.get(self.index) {
             if todo.delete(&self.db).is_ok() {
-                self.day.remove_todo(&self.db, self.index).expect("Error: Cannot remove todo.");
+                self.day
+                    .remove_todo(&self.db, self.index)
+                    .expect("Error: Cannot remove todo.");
                 self.stats_list.update(&self.db).unwrap();
                 if self.index >= self.day.todos.len() && self.index != 0 {
                     self.index -= 1;
@@ -248,7 +252,7 @@ impl App {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
@@ -267,23 +271,21 @@ fn main() -> Result<()> {
 
         if let Key(key) = event::read()? {
             match app.screen {
-                Screen::NewTodo => {
-                    match key.code {
-                        KeyCode::Esc => {
-                            app.input.clear();
-                            app.set_screen(Screen::Todos);
-                        }
-                        KeyCode::Backspace => {
-                            app.input.pop();
-                        }
-                        KeyCode::Enter => {
-                            app.set_screen(Screen::Todos);
-                            app.create();
-                        }
-                        KeyCode::Char(c) => app.input.push(c),
-                        _ => {}
+                Screen::NewTodo => match key.code {
+                    KeyCode::Esc => {
+                        app.input.clear();
+                        app.set_screen(Screen::Todos);
                     }
-                }
+                    KeyCode::Backspace => {
+                        app.input.pop();
+                    }
+                    KeyCode::Enter => {
+                        app.set_screen(Screen::Todos);
+                        app.create();
+                    }
+                    KeyCode::Char(c) => app.input.push(c),
+                    _ => {}
+                },
                 Screen::Todos => {
                     if let KeyCode::Char(char) = key.code {
                         match char.to_ascii_lowercase() {
@@ -312,40 +314,34 @@ fn main() -> Result<()> {
                         }
                     }
                 }
-                Screen::NewDailyTodo => {
-                    match key.code {
-                        KeyCode::Esc => {
-                            app.daily_todos.input.clear();
-                            app.set_screen(Screen::DailyTodos);
-                        }
-                        KeyCode::Backspace => {
-                            app.daily_todos.input.pop();
-                        }
-                        KeyCode::Enter => {
-                            app.set_screen(Screen::DailyTodos);
-                            app.daily_todos.create(&app.db);
-                        }
-                        KeyCode::Char(c) => app.daily_todos.input.push(c),
-                        _ => {}
+                Screen::NewDailyTodo => match key.code {
+                    KeyCode::Esc => {
+                        app.daily_todos.input.clear();
+                        app.set_screen(Screen::DailyTodos);
                     }
-                }
-                Screen::DailyTodos => {
-                    match key.code {
-                        KeyCode::Esc => {
-                            app.set_screen(Screen::Todos);
-                        }
-                        KeyCode::Char(c) => {
-                            match c.to_ascii_lowercase() {
-                                'j' => app.daily_todos.next(&app.db, key.modifiers),
-                                'k' => app.daily_todos.previous(&app.db, key.modifiers),
-                                'n' => app.set_screen(Screen::NewDailyTodo),
-                                'd' => app.daily_todos.delete(&app.db),
-                                _ => {}
-                            }
-                        }
-                        _ => {}
+                    KeyCode::Backspace => {
+                        app.daily_todos.input.pop();
                     }
-                }
+                    KeyCode::Enter => {
+                        app.set_screen(Screen::DailyTodos);
+                        app.daily_todos.create(&app.db);
+                    }
+                    KeyCode::Char(c) => app.daily_todos.input.push(c),
+                    _ => {}
+                },
+                Screen::DailyTodos => match key.code {
+                    KeyCode::Esc => {
+                        app.set_screen(Screen::Todos);
+                    }
+                    KeyCode::Char(c) => match c.to_ascii_lowercase() {
+                        'j' => app.daily_todos.next(&app.db, key.modifiers),
+                        'k' => app.daily_todos.previous(&app.db, key.modifiers),
+                        'n' => app.set_screen(Screen::NewDailyTodo),
+                        'd' => app.daily_todos.delete(&app.db),
+                        _ => {}
+                    },
+                    _ => {}
+                },
                 Screen::Notes => {
                     if let KeyCode::Char(char) = key.code {
                         match char.to_ascii_lowercase() {
@@ -357,38 +353,40 @@ fn main() -> Result<()> {
                         }
                     }
                 }
-                Screen::EditNotes => {
-                    match key.code {
-                        KeyCode::Esc => {
-                            app.set_screen(Screen::Notes);
-                            app.day.set_notes(&app.db).expect("Error: Cannot save notes.");
-                        }
-                        KeyCode::Backspace => {
-                            app.day.notes.pop();
-                        }
-                        KeyCode::Enter => app.day.notes.push('\n'),
-                        KeyCode::Char(c) => app.day.notes.push(c),
-                        _ => {}
+                Screen::EditNotes => match key.code {
+                    KeyCode::Esc => {
+                        app.set_screen(Screen::Notes);
+                        app.day
+                            .set_notes(&app.db)
+                            .expect("Error: Cannot save notes.");
                     }
-                }
-                Screen::Stats => {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char('h') => app.stats_list.previous(),
-                        KeyCode::Char('l') => app.stats_list.next(),
-                        KeyCode::Char('s') | KeyCode::Esc => {
-                            app.input.clear();
-                            app.set_screen(Screen::Todos);
-                        }
-                        _ => {}
+                    KeyCode::Backspace => {
+                        app.day.notes.pop();
                     }
-                }
+                    KeyCode::Enter => app.day.notes.push('\n'),
+                    KeyCode::Char(c) => app.day.notes.push(c),
+                    _ => {}
+                },
+                Screen::Stats => match key.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Char('h') => app.stats_list.previous(),
+                    KeyCode::Char('l') => app.stats_list.next(),
+                    KeyCode::Char('s') | KeyCode::Esc => {
+                        app.input.clear();
+                        app.set_screen(Screen::Todos);
+                    }
+                    _ => {}
+                },
             }
         }
     }
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(),LeaveAlternateScreen,DisableMouseCapture)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
     terminal.show_cursor()?;
 
     Ok(())

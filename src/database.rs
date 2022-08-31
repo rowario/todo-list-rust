@@ -30,15 +30,16 @@ impl Todo {
 
     pub fn get_all(db: &Connection, day_id: i64) -> Result<Vec<Self>> {
         let mut stmt = db.prepare("SELECT id, day_id, position, text, completed FROM todos WHERE day_id = ?1 ORDER BY position ASC")?;
-        let todos: Vec<Self> = stmt.query_map([day_id], |row| {
-            Ok(Self {
-                id: row.get(0)?,
-                day_id: row.get(1)?,
-                position: row.get(2)?,
-                text: row.get(3)?,
-                completed: row.get(4)?,
-            })
-        })?
+        let todos: Vec<Self> = stmt
+            .query_map([day_id], |row| {
+                Ok(Self {
+                    id: row.get(0)?,
+                    day_id: row.get(1)?,
+                    position: row.get(2)?,
+                    text: row.get(3)?,
+                    completed: row.get(4)?,
+                })
+            })?
             .filter_map(Result::ok)
             .collect();
         Ok(todos)
@@ -85,10 +86,7 @@ pub struct DailyTodo {
 
 impl DailyTodo {
     pub fn new(db: &Connection, text: &str) -> Result<Self> {
-        db.execute(
-            "INSERT INTO daily_todos (text) VALUES (?1)",
-            &[text],
-        )?;
+        db.execute("INSERT INTO daily_todos (text) VALUES (?1)", &[text])?;
         let id = db.last_insert_rowid();
         db.execute(
             "UPDATE daily_todos SET position = ?1 WHERE id = ?2",
@@ -102,14 +100,16 @@ impl DailyTodo {
     }
 
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
-        let mut stmt = db.prepare("SELECT id, position, text FROM daily_todos ORDER BY position ASC")?;
-        let days: Vec<Self> = stmt.query_map([], |r| {
-            Ok(Self {
-                id: r.get(0)?,
-                position: r.get(1)?,
-                text: r.get(2)?,
-            })
-        })?
+        let mut stmt =
+            db.prepare("SELECT id, position, text FROM daily_todos ORDER BY position ASC")?;
+        let days: Vec<Self> = stmt
+            .query_map([], |r| {
+                Ok(Self {
+                    id: r.get(0)?,
+                    position: r.get(1)?,
+                    text: r.get(2)?,
+                })
+            })?
             .filter_map(Result::ok)
             .collect();
         Ok(days)
@@ -152,7 +152,8 @@ impl Day {
         )?;
         let id = db.last_insert_rowid();
         let daily_todos = DailyTodo::get_all(db)?;
-        let todos: Vec<Todo> = daily_todos.iter()
+        let todos: Vec<Todo> = daily_todos
+            .iter()
             .map(|todo| Todo::new(db, &todo.text, id).unwrap())
             .collect();
         Ok(Self {
@@ -166,7 +167,9 @@ impl Day {
     }
 
     pub fn get(db: &Connection, day_id: i64) -> Result<Self> {
-        let mut stmt = db.prepare("SELECT id, count_todos, done_todos, notes, date FROM days WHERE id = ?1 LIMIT 1")?;
+        let mut stmt = db.prepare(
+            "SELECT id, count_todos, done_todos, notes, date FROM days WHERE id = ?1 LIMIT 1",
+        )?;
         let day = stmt.query_row([day_id], |r| {
             let id = r.get(0)?;
             let todos = Todo::get_all(db, id)?;
@@ -223,16 +226,17 @@ pub struct DayShort {
 impl DayShort {
     pub fn get_all(db: &Connection) -> Result<Vec<Self>> {
         let mut stmt = db.prepare("SELECT id, date, count_todos, done_todos FROM days")?;
-        let days: Vec<Self> = stmt.query_map([], |r| {
-            let count: usize = r.get(2)?;
-            let done: usize = r.get(3)?;
-            Ok(Self {
-                id: r.get(0)?,
-                date: r.get(1)?,
-                string: format!("{}/{}", done, count),
-                done,
-            })
-        })?
+        let days: Vec<Self> = stmt
+            .query_map([], |r| {
+                let count: usize = r.get(2)?;
+                let done: usize = r.get(3)?;
+                Ok(Self {
+                    id: r.get(0)?,
+                    date: r.get(1)?,
+                    string: format!("{}/{}", done, count),
+                    done,
+                })
+            })?
             .filter_map(Result::ok)
             .collect();
         Ok(days)
